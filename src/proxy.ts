@@ -11,7 +11,7 @@ import { NextResponse, type NextRequest } from 'next/server'
  * even if this layer were bypassed, the database still refuses.
  * Defence in depth — neither layer is trusted alone.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
