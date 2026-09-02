@@ -79,6 +79,14 @@ export default function ChatThread({
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [pending, startTransition] = useTransition()
+    /**
+   * The message just sent, shown immediately. The server round-trip runs
+   * redaction, two risk layers, an LLM call and memory extraction — several
+   * seconds. Watching your own words disappear for that long reads as the
+   * app losing them, which is the wrong feeling in a conversation someone
+   * found hard to start.
+   */
+  const [optimistic, setOptimistic] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -113,9 +121,11 @@ export default function ChatThread({
 
     setError(null)
     setInput('')
+    setOptimistic(text)
 
     startTransition(async () => {
       const result = await sendGuestMessage(text)
+      setOptimistic(null)
       if (result?.error === 'expired') {
         router.push('/link-invalid?reason=expired')
         return
@@ -135,9 +145,11 @@ export default function ChatThread({
   function sendChip(text: string) {
     if (pending) return
     setError(null)
+    setOptimistic(text)
 
     startTransition(async () => {
       const result = await sendGuestMessage(text)
+      setOptimistic(null)
       if (result?.error === 'expired') {
         router.push('/link-invalid?reason=expired')
         return
@@ -288,6 +300,25 @@ export default function ChatThread({
               </li>
             )
           })}
+
+          {/* The message just sent, shown immediately at reduced opacity.
+              The round-trip runs redaction, two risk layers, an LLM call and
+              memory extraction — several seconds. Watching your own words
+              vanish for that long reads as the app losing them, which is the
+              wrong feeling in a conversation someone found hard to start. */}
+          {optimistic && (
+            <li className="flex justify-end">
+              <div
+                className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed opacity-60"
+                style={{
+                  backgroundColor: 'var(--fb-muted)',
+                  color: 'var(--fb-text)',
+                }}
+              >
+                <span className="whitespace-pre-wrap">{optimistic}</span>
+              </div>
+            </li>
+          )}
 
           {pending && (
             <li className="flex justify-start">
