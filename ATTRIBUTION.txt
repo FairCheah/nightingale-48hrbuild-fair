@@ -1,0 +1,126 @@
+NIGHTINGALE — ATTRIBUTION
+Fairbloom Fertility & Women's Health
+Fair Cheah, September 2026
+
+Five runtime dependencies. No auth library, no state manager, no component
+kit, no ORM, no HTTP client. The Anthropic API is called with plain fetch.
+
+
+RUNTIME DEPENDENCIES
+--------------------------------------------------------------------------
+next                    16.3.4      MIT     Vercel
+react                   19.2.8      MIT     Meta Platforms and contributors
+react-dom               19.2.8      MIT     Meta Platforms and contributors
+@supabase/supabase-js   ^2.112.4    MIT     Supabase
+@supabase/ssr           ^0.12.5     MIT     Supabase
+
+
+DEVELOPMENT DEPENDENCIES
+--------------------------------------------------------------------------
+typescript              ^5          Apache-2.0   Microsoft
+tailwindcss             ^4          MIT          Tailwind Labs
+@tailwindcss/postcss    ^4          MIT          Tailwind Labs
+vitest                  ^4.1.11     MIT          Vitest contributors
+dotenv                  ^17.4.2     BSD-2-Clause Motdotla
+eslint                  ^9          MIT          OpenJS Foundation
+eslint-config-next      16.3.4      MIT          Vercel
+@types/node             ^20         MIT          DefinitelyTyped contributors
+@types/react            ^19         MIT          DefinitelyTyped contributors
+@types/react-dom        ^19         MIT          DefinitelyTyped contributors
+
+
+MODELS
+--------------------------------------------------------------------------
+Anthropic Claude Haiku 4.5   (claude-haiku-4-5-20251001)
+  Used for three narrow jobs, each a separate call with its own prompt:
+    1. Risk classification  — src/lib/nightingale-ai.ts
+    2. Conversational reply — src/lib/nightingale-ai.ts
+    3. Fact extraction      — src/lib/memory.ts
+  Plus triage summarisation (src/app/chat/escalate.ts) and the shareable
+  card (src/lib/value-events.ts).
+
+  Chosen as the cheapest and fastest model in the range. Every job here is
+  narrow and tightly constrained by a system prompt; none needed a larger
+  model, and cost per conversation matters for a clinic.
+
+  Accessed through the Anthropic Messages API. Governed by Anthropic's
+  Commercial Terms of Service. The model is not fine-tuned, and no data
+  from this build was used for training.
+
+  src/lib/llm.ts is provider-agnostic. Nothing above that file knows which
+  model answered; swapping providers is a change to one file.
+
+
+SERVICES
+--------------------------------------------------------------------------
+Supabase   Postgres, Auth, and Row Level Security.
+           Singapore region. Free tier.
+           TLS in transit and encryption at rest are platform defaults.
+
+
+KNOWLEDGE CORPUS
+--------------------------------------------------------------------------
+src/lib/knowledge.ts contains twenty short public-health statements used to
+ground the assistant's low-risk answers. Each names the organisation that
+publishes on the topic:
+
+  World Health Organization   who.int    fact sheets on infertility,
+                                         endometriosis, PCOS, STIs, cervical
+                                         cancer, contraception, maternal
+                                         mental health
+  NHS (UK)                    nhs.uk     conditions pages on infertility,
+                                         IVF, periods, vaginal discharge,
+                                         pregnancy, miscarriage, menopause
+  NICE (UK)                   nice.org.uk  NG88, heavy menstrual bleeding
+
+IMPORTANT: these entries were written for this build. They are paraphrases
+restricted to broadly accepted public-health statements, not quotations, and
+they were not written or reviewed by a clinician. A real deployment replaces
+this file with clinician-reviewed content; no other code changes.
+
+
+MALAYSIAN CRISIS AND SUPPORT SERVICES
+--------------------------------------------------------------------------
+Referenced in emergency response scripts (src/lib/risk.ts). Numbers verified
+against each operator's own published information during the build.
+
+  Befrienders Kuala Lumpur        03-7627 2929      24 hours
+  National Mental Health Crisis
+    Line (Heal Line)              15555
+  Talian Kasih                    15999             24 hours
+                                  019-261 5999      WhatsApp
+  Women's Aid Organisation
+    TINA (SMS/WhatsApp)           018-988 8058      24 hours
+    Hotline                       03-3000 8858      office hours
+  One Stop Crisis Centres         located in government hospital
+                                  emergency departments
+  MERS emergency services         999
+
+These organisations are named as referral routes only. They have no
+affiliation with this project.
+
+
+DEVELOPMENT TOOLS
+--------------------------------------------------------------------------
+Claude (Anthropic) was used as a pair programmer throughout: architecture
+discussion, code generation, debugging, and drafting written deliverables.
+Every design decision, every departure from the brief, and every line that
+shipped was reviewed and accepted by the author. Several of the build's
+better decisions — scope-aware routing, the refusal to act on likes, the
+in-scope/out-of-scope split — came from questioning what was proposed.
+
+VS Code, Git, Supabase SQL Editor.
+
+
+DATA
+--------------------------------------------------------------------------
+Synthetic data only. Every account, conversation, symptom, medication and
+clinical concern in this repository, the database, and the demo video was
+fabricated for this build. No real patient data exists anywhere in it.
+
+
+TRADEMARKS
+--------------------------------------------------------------------------
+"Fairbloom Fertility & Women's Health" is a fictional clinic invented for
+this exercise. Instagram, TikTok and Facebook are trademarks of their
+respective owners and are referenced only as acquisition channels.

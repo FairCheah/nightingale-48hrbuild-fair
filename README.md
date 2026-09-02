@@ -40,21 +40,22 @@ Supabase keys are under Project Settings → API. The service role key bypasses 
 Run everything in `supabase/migrations/` in numerical order through the Supabase SQL Editor. They are numbered by execution order, not by date. 07 through 09 are fixes to earlier migrations and must not be skipped.
 
 ```text
-01_initial_schema.sql            13 tables, RLS enabled, indexes, seed clinic
-02_rls_policies.sql              initial policy set
-03_seed_channel_rules.sql        23 channel rules incl. 6 intent-based
-04_rls_role_refinement.sql       patient / staff / nurse / clinician separation
-05_auth_bootstrap.sql            auth.users -> app_users, role forced to 'patient'
-06_seed_users.sql                assigns care-team roles to the test accounts
-07_fix_app_users_recursion.sql   RLS recursion fix on app_users
-08_fix_grants.sql                restores authenticated SELECT
-09_fix_service_role_grants.sql   restores service_role DML
-10_conversion_and_retention.sql  migration consent, message scope, 14-day retention, purge function
-11_channel_rules_ai_wording.sql  "AI assistant", never just "assistant"
-12_opening_chips.sql             opening chips on channel rules
-13_lead_chips.sql                opening chips column on lead sessions
-14_referral_template.sql         referral template quotes the staff note
-15_guest_content_visibility.sql  guest content hidden from staff until consent
+01_initial_schema.sql              13 tables, RLS enabled, indexes, seed clinic
+02_rls_policies.sql                initial policy set
+03_seed_channel_rules.sql          23 channel rules incl. 6 intent-based
+04_rls_role_refinement.sql         patient / staff / nurse / clinician separation
+05_auth_bootstrap.sql              auth.users -> app_users, role forced to 'patient'
+06_seed_users.sql                  assigns care-team roles to the test accounts
+07_fix_app_users_recursion.sql     RLS recursion fix on app_users
+08_fix_grants.sql                  restores authenticated SELECT
+09_fix_service_role_grants.sql     restores service_role DML
+10_conversion_and_retention.sql    migration consent, message scope, 14-day retention, purge function
+11_channel_rules_ai_wording.sql    "AI assistant", never just "assistant"
+12_opening_chips.sql               opening chips on channel rules
+13_lead_chips.sql                  opening chips column on lead sessions
+14_referral_template.sql           referral template quotes the staff note
+15_guest_content_visibility.sql    guest content hidden from staff until consent
+16_schedule_purge.sql              nightly pg_cron job running the purge
 ```
 
 ---
