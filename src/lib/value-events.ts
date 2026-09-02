@@ -199,11 +199,20 @@ export async function recordValueEvent(params: {
     .select('id')
     .single()
 
+  // The channel must travel with the event, or per-channel metrics collapse
+  // into an "unknown" bucket that answers nothing.
+  const { data: lead } = await admin
+    .from('lead_sessions')
+    .select('source_channel')
+    .eq('id', params.leadSessionId)
+    .maybeSingle()
+
   await admin.from('events').insert({
     clinic_id: params.clinicId,
     lead_session_id: params.leadSessionId,
     event_type: 'value_event',
     event_detail: {
+      source_channel: lead?.source_channel ?? null,
       value_type: params.valueType,
       // The number is metadata, not clinical content — safe to log.
       stat_value: params.stat?.value ?? null,
