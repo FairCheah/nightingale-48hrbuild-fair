@@ -7,6 +7,7 @@ import { safeRedact } from '@/lib/redaction'
 import { assessKeywordRisk, combineRisk, EMERGENCY_SCRIPTS } from '@/lib/risk'
 import { classifyRisk, generateReply } from '@/lib/nightingale-ai'
 import type { LlmTurn } from '@/lib/llm'
+import { extractFacts, type ExistingFact } from '@/lib/memory'
 
 /**
  * SEND MESSAGE — the single write path for guest conversation.
@@ -171,6 +172,16 @@ export async function sendGuestMessage(content: string) {
     .select('id')
     .single()
 
+      // 6b. LIVING MEMORY. Runs after the reply so a slow extraction never
+  //     delays the patient's answer, and never blocks an emergency script.
+  //     Failure here degrades the profile, not the conversation.
+  const memoryResult = await updateMemory(
+    admin,
+    lead.id,
+    guestMessage.id,
+    history,
+  ).catch(() => ({ extracted: 0, superseded: 0 }))
+
   // 7. Counters + audit. Metadata only — never the message text.
   await admin
     .from('lead_sessions')
@@ -198,6 +209,9 @@ export async function sendGuestMessage(content: string) {
       risk_matched: risk.matched,
       risk_source: risk.source,
       llm_classifier_available: llmRisk !== null,
+      // Counts only — never the fact values, which are clinical content.
+      facts_extracted: memoryResult.extracted,
+      facts_superseded: memoryResult.superseded,
       reply_id: aiMessage?.id ?? null,
     },
   })
@@ -247,4 +261,98 @@ async function loadRedactedHistory(
   while (turns.length > 0 && turns[0].role !== 'user') turns.shift()
 
   return turns
+}
+
+/**
+ * LIVING MEMORY PERSISTENCE — the provenance chain.
+ *
+ * Brief §7: memory items carry value, status, provenance_pointer and
+ * updated_at, and corrections must leave an unbroken chain.
+ *
+ * We never delete and never overwrite in place. When a fact is corrected:
+ *   1. the old row's status becomes 'corrected' (or 'stopped'/'resolved')
+ *   2. a new row is inserted, with `supersedes` pointing at the old row's id
+ *   3. both rows keep their own provenance_pointer to the message that
+ *      produced them
+ *
+ * A clinician can therefore reconstruct not just what is true now, but what
+ * the patient said, when, and what replaced it. That history is the point —
+ * "Advil (stopped last week)" means something different from "no medications".
+ */
+async function updateMemory(
+  admin: ReturnType<typeof createAdminClient>,
+  leadSessionId: string,
+  sourceMessageId: string,
+  history: LlmTurn[],
+) {
+  // Current profile: the live rows only. Superseded rows stay in the table
+  // for provenance but must not be re-sent to the extractor as current.
+  const { data: existingRows } = await admin
+    .from('memory_items')
+    .select('id, kind, value, status')
+    .eq('lead_session_id', leadSessionId)
+    .is('supersedes', null)
+    .order('created_at', { ascending: true })
+
+  const existing = (existingRows ?? []) as ExistingFact[]
+
+  const facts = await extractFacts(history, existing)
+  if (facts.length === 0) return { extracted: 0, superseded: 0 }
+
+  const now = new Date().toISOString()
+  let superseded = 0
+
+  for (const fact of facts) {
+    // Find the row this fact replaces. Match on the value the model named,
+    // falling back to an exact value match within the same kind.
+    const target = fact.supersedesValue
+      ? existing.find(
+          (row) =>
+            row.value.toLowerCase() === fact.supersedesValue!.toLowerCase(),
+        )
+      : existing.find(
+          (row) =>
+            row.kind === fact.kind &&
+            row.value.toLowerCase() === fact.value.toLowerCase(),
+        )
+
+    if (target) {
+      // Skip a no-op: the model occasionally re-reports an unchanged fact.
+      const unchanged =
+        target.status === fact.status &&
+        target.value.toLowerCase() === fact.value.toLowerCase()
+      if (unchanged) continue
+
+      /**
+       * The old row is retired, not deleted. Its status records HOW it ended:
+       * a stopped medication and a mistaken one are clinically different, and
+       * flattening both to "removed" would lose that.
+       */
+      await admin
+        .from('memory_items')
+        .update({
+          status: fact.status === 'active' ? 'corrected' : fact.status,
+          updated_at: now,
+        })
+        .eq('id', target.id)
+
+      superseded += 1
+    }
+
+    await admin.from('memory_items').insert({
+      lead_session_id: leadSessionId,
+      kind: fact.kind,
+      value: fact.value,
+      status: fact.status,
+      timeline: fact.timeline,
+      // The exact message that produced this fact. This is what
+      // test_memory_mutation resolves to prove the chain is unbroken.
+      provenance_pointer: sourceMessageId,
+      supersedes: target?.id ?? null,
+      conflict_flag: false,
+      updated_at: now,
+    })
+  }
+
+  return { extracted: facts.length, superseded }
 }

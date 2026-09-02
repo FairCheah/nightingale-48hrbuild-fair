@@ -10,8 +10,9 @@
  *   cannot fail through a network timeout. Guarantees the four phrases the
  *   brief names can never be missed.
  *
- *   Layer 2 (llm-risk.ts): an LLM classifier that reads meaning, catching
- *   phrasing no list anticipates — "I don't see the point anymore".
+ *   Layer 2 (nightingale-ai.ts): an LLM classifier that reads meaning,
+ *   catching phrasing no list anticipates — "I don't see the point anymore",
+ *   "my baby is in danger".
  *
  * THE SAFETY RULE: final = max(keyword, llm). The model may only RAISE risk,
  * never lower it. A hallucinating model cannot downgrade an emergency, and if
@@ -32,10 +33,18 @@ export type Confidence = 'low' | 'med' | 'high'
  * Distinct emergencies need distinct responses. Telling someone who typed
  * "I don't see the point anymore" to go to an emergency department reads as
  * a brush-off and asks a person with flattened executive function to perform
- * logistics. Telling someone with a haemorrhage to "sit with this feeling"
- * would be lethal. Same urgency, different scripts.
+ * logistics. Telling a parent describing danger to their baby "do not drive
+ * yourself" is answering a question they did not ask. Telling someone with a
+ * haemorrhage to "sit with this feeling" would be lethal.
+ *
+ * Same urgency, four different scripts.
  */
-export type EmergencyKind = 'medical' | 'self_harm' | 'sexual_violence' | null
+export type EmergencyKind =
+  | 'medical'
+  | 'self_harm'
+  | 'sexual_violence'
+  | 'safeguarding'
+  | null
 
 /**
  * Can THIS clinic act on this concern?
@@ -74,12 +83,11 @@ interface Rule {
 }
 
 /**
- * TIER 1 — HIGH. Immediate danger to life.
+ * TIER 1 — HIGH. Immediate danger to life or safety.
  * The four phrases the brief mandates are marked; they must never regress.
  *
- * Note every high-risk path says "call 999" regardless of scope — that is
- * correct no matter who we are. Scope only governs whether we additionally
- * offer a Fairbloom nurse for follow-up.
+ * Every high-risk path offers 999 where relevant — that is correct no matter
+ * who we are. Scope governs whether we additionally offer a Fairbloom nurse.
  */
 const HIGH_RULES: Rule[] = [
   {
@@ -210,9 +218,27 @@ const HIGH_RULES: Rule[] = [
       /(no point|not worth) (living|going on|anymore)/i,
       /(suicide|suicidal)/i,
       /end it all/i,
-      /(hurt|harm|drop|shake) (my|the) baby/i,
       /can'?t (do this|go on) anymore/i,
       /want to disappear/i,
+    ],
+  },
+  {
+    /**
+     * A child or a person at risk from someone else is neither a medical
+     * emergency nor self-harm. "Do not drive yourself to A&E" is the wrong
+     * sentence for a parent describing danger to their baby, and it was the
+     * sentence this system gave before this category existed.
+     */
+    label: 'safeguarding',
+    kind: 'safeguarding',
+    scope: 'in_scope',
+    patterns: [
+      /(hurt|harm|drop|shake|hit) (my|the) baby/i,
+      /(my )?baby (is )?(in danger|not safe|being hurt)/i,
+      /(afraid|scared|frightened) (for|of what).{0,20}(baby|child)/i,
+      /(being |am )?(abused|beaten|threatened)/i,
+      /(he|she|they) (hits?|hurts?|threatens?) (me|us|my baby)/i,
+      /not safe at home/i,
     ],
   },
   {
@@ -332,10 +358,15 @@ export function assessKeywordRisk(text: string): RiskAssessment {
 
   const high = scan(text, HIGH_RULES)
   if (high.length > 0) {
-    // A self-harm or sexual-violence signal outranks a medical one for the
-    // purpose of choosing the response script.
+    /**
+     * Which script to use when several fire. Self-harm first: a person in
+     * crisis who also mentions a symptom needs the crisis response. Then
+     * safeguarding, then sexual violence, then medical. Ordering by who is
+     * least well served by the generic 999 script.
+     */
     const priority =
       high.find((r) => r.kind === 'self_harm') ??
+      high.find((r) => r.kind === 'safeguarding') ??
       high.find((r) => r.kind === 'sexual_violence') ??
       high[0]
 
@@ -345,8 +376,8 @@ export function assessKeywordRisk(text: string): RiskAssessment {
       confidence: 'high',
       emergencyKind: priority.kind,
       escalationRequired: true,
-      // Self-harm and sexual violence keep their own in-scope routing even
-      // when a medical rule also fired, because the support offer differs.
+      // Non-medical kinds keep their own in-scope routing even when a medical
+      // rule also fired, because the support offer differs.
       scope:
         priority.kind === 'medical' ? narrowestScope(high) : priority.scope,
       source: 'keyword',
@@ -416,12 +447,16 @@ export function combineRisk(
 /**
  * RESPONSE SCRIPTS.
  * On High, the AI says only this. No education, no reassurance, no hedging.
- * Numbers verified against the operators' own sites.
+ * Numbers verified against the operators' own published sources.
  */
-export const EMERGENCY_SCRIPTS: Record<
-  Exclude<EmergencyKind, null>,
-  { body: string; banner: string }
-> = {
+type EmergencyScript = { body: string; banner: string }
+
+export const EMERGENCY_SCRIPTS: {
+  medical: EmergencyScript
+  self_harm: EmergencyScript
+  safeguarding: EmergencyScript
+  sexual_violence: EmergencyScript
+} = {
   medical: {
     banner: 'Call 999 or visit the nearest HOSPITAL EMERGENCY DEPARTMENT',
     body:
@@ -442,6 +477,20 @@ export const EMERGENCY_SCRIPTS: Record<
       'If you are in immediate danger, please call 999.\n\n' +
       'I can also pass this to a nurse at Fairbloom so a real person follows up with you. ' +
       'Would you like me to?',
+  },
+  safeguarding: {
+    banner: 'Talian Kasih 15999 — 24 hours, for anyone at risk',
+    body:
+      'Thank you for telling me. I want to make sure you and your baby are safe.\n\n' +
+      'If either of you is in immediate danger right now, please call 999.\n\n' +
+      'Talian Kasih is the national helpline for anyone at risk, including children. ' +
+      'It answers 24 hours on 15999, or on WhatsApp at 019-261 5999. ' +
+      'Women\u2019s Aid Organisation can also help you think through your options and ' +
+      'somewhere safe to stay — TINA on SMS or WhatsApp at 018-988 8058, answered ' +
+      '24 hours.\n\n' +
+      'You do not have to have decided anything to call them.\n\n' +
+      'I can also pass this to a nurse at Fairbloom if you would like a real person ' +
+      'from the clinic to follow up.',
   },
   sexual_violence: {
     banner: 'Support is available — WAO TINA WhatsApp 018-988 8058, 24 hours',

@@ -27,10 +27,12 @@ const CLASSIFIER_SYSTEM = `You are a clinical risk classifier for a Malaysian fe
 Read the conversation and judge the RISK OF HARM in the final user message, considering the earlier turns as context. Crisis often develops across several messages rather than appearing in one.
 
 Return exactly this JSON, nothing else:
-{"level":"low|med|high","reason":"under 15 words","kind":"medical|self_harm|sexual_violence|none"}
+{"level":"low|med|high","reason":"under 15 words","kind":"medical|self_harm|sexual_violence|safeguarding|none"}
 
 LEVELS
-- high: possible immediate danger to life or safety. Cardiac, stroke, breathing difficulty, severe bleeding, obstetric emergency, sepsis, suicidal or self-harm intent, harm to an infant, sexual violence.
+- high: possible immediate danger to life or safety. Cardiac, stroke, breathing difficulty, severe bleeding, obstetric emergency, sepsis, suicidal or self-harm intent, sexual violence, or safeguarding.
+
+Use kind "safeguarding" when the danger comes from another person or the environment rather than from illness or the person's own intent. Domestic abuse, a baby at risk, and fear of someone at home are safeguarding, not medical.
 - med: concerning, ambiguous, or a symptom that needs a clinician but is not immediately dangerous. Also use med when you are unsure.
 - low: general information, services, hours, education, small talk.
 
@@ -38,6 +40,14 @@ CRITICAL BIAS
 For self-harm and emotional distress, flag on POSSIBLE distress rather than clear intent. Indirect phrasing is normal and often the only signal: "I don't see the point anymore", "everyone would cope better without me", "I keep imagining dropping her", "I've been thinking about not waking up". Treat these as high.
 
 Over-flagging costs a person a gentle offer of support they can decline. Under-flagging can cost a life. When torn, choose the higher level.
+
+BUT the distress bias applies to EMOTIONAL content only. Do not read distress into ordinary clinical statements. These are low or med, never self_harm:
+- stopping, starting or changing a medication ("I stopped Advil last week")
+- describing a symptom ending ("the cramps have gone")
+- ending a treatment cycle, or deciding against a procedure
+- the words "stop", "end", "quit", "done", "over" applied to anything other than the person's own life
+
+"I stopped taking Advil" is a medication update. "I want it all to stop" is not. Read what the sentence is about, not which words appear in it.
 
 Names and identifiers have been replaced with placeholders like [NAME_1]. That is expected; ignore them.
 
@@ -57,6 +67,7 @@ function toRiskLevel(value: string): RiskLevel {
 
 function toKind(value: string): EmergencyKind {
   if (value === 'self_harm') return 'self_harm'
+  if (value === 'safeguarding') return 'safeguarding'
   if (value === 'sexual_violence') return 'sexual_violence'
   if (value === 'medical') return 'medical'
   return null
@@ -102,7 +113,7 @@ You are an AI, not a doctor, nurse or counsellor. If anyone asks whether you are
 
 WHAT YOU MUST NOT DO
 - Never diagnose. Never say "you have X" or "this sounds like X".
-- Never suggest starting, stopping or changing any medication or dose.
+- Never suggest starting, stopping or changing any medication or dose. This includes HOW to take one: timing, whether to take it with food, what to combine it with, or what to do if it is not working. If someone mentions a medication, you may acknowledge it and note that a clinician or pharmacist can advise on how to take it — you may not advise yourself.
 - Never give a treatment plan beyond general information plus "a clinician should look at this".
 - Never reassure someone that a worrying symptom is probably fine. You cannot know that.
 - Never invent clinic-specific facts: prices, appointment slots, staff names, wait times, success rates. If you do not know, say you do not know and offer to pass the question to the clinic.
