@@ -20,7 +20,29 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--fb-bg);
+  color: var(--fb-text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ============================================================
+   FAIRBLOOM — DESIGN TOKENS
+   Orchid Bloom (warm identity) + sage (clinical grounding).
+   Every colour in the app resolves here. Retuning the brand
+   is a change to this block only.
+   ============================================================ */
+
+:root {
+  --fb-bg: #faf6f5;
+  --fb-surface: #ffffff;
+  --fb-muted: #ffdede;
+  --fb-lilac: #e8bae3;
+  --fb-primary: #7c8b7f;
+  --fb-primary-dk: #5f6e63;
+  --fb-accent: #f48a71;
+  --fb-text: #3e3244;
+  --fb-text-soft: #7b6e80;
+  --fb-border: #eadfe4;
+  --fb-danger: #b4544a;
+  --fb-safe: #6f8f84;
 }
