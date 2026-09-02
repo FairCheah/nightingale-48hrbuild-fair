@@ -10,8 +10,8 @@ export const metadata = { title: 'Leads — Fairbloom staff' }
  *
  * Role-gated twice: the proxy blocks non-staff from /staff/*, and this page
  * reads the caller's role again to decide what it may show. Staff see
- * acquisition data; only nurses and clinicians see clinical content, and only
- * where the person consented or asked for a human.
+ * acquisition data; only nurses and clinicians see clinical content and
+ * contact details, and only where the person consented or asked for a human.
  */
 export default async function LeadsPage() {
   const supabase = await createClient()
@@ -83,13 +83,36 @@ export default async function LeadsPage() {
 
   const { data: converted } = await admin
     .from('patient_sessions')
-    .select('lead_session_id')
+    .select('lead_session_id, patient_id, marketing_consent')
     .in('lead_session_id', leadIds.length ? leadIds : ['none'])
+
+  /**
+   * Contact details, per §5: "Contact suggestions only where contact info and
+   * consent exist." Looked up only for converted sessions — an anonymous
+   * guest has no contact point and no consent, so there is nothing to fetch.
+   *
+   * Restricted to clinical roles. Reception and marketing get the funnel, not
+   * the phone number: knowing a lead converted is an acquisition fact, being
+   * able to ring them about a fertility enquiry is a clinical one.
+   */
+  const patientIds = (converted ?? [])
+    .map((p) => p.patient_id)
+    .filter((id): id is string => Boolean(id))
+
+  const { data: contactRows } =
+    isClinical && patientIds.length
+      ? await admin.from('app_users').select('id, email, phone').in('id', patientIds)
+      : { data: null }
+
+  const contactsByPatient = new Map((contactRows ?? []).map((c) => [c.id, c]))
 
   const escalated = new Map(
     (escalationRows ?? []).map((e) => [e.lead_session_id, e]),
   )
   const convertedIds = new Set((converted ?? []).map((p) => p.lead_session_id))
+  const sessionByLead = new Map(
+    (converted ?? []).map((p) => [p.lead_session_id, p]),
+  )
 
   const now = Date.now()
 
@@ -115,6 +138,11 @@ export default async function LeadsPage() {
     const stage = convertedIds.has(lead.id) ? 30 : escalation ? 25 : 10
     const channel = lead.source_channel === 'staff_referral' ? 15 : 5
 
+    const session = sessionByLead.get(lead.id)
+    const contactRow = session?.patient_id
+      ? contactsByPatient.get(session.patient_id)
+      : undefined
+
     return {
       id: lead.id,
       channel: lead.source_channel,
@@ -137,6 +165,13 @@ export default async function LeadsPage() {
       isHighRisk,
       escalationStatus: escalation?.status ?? null,
       converted: convertedIds.has(lead.id),
+      contact: contactRow
+        ? {
+            email: (contactRow.email as string | null) ?? null,
+            phone: (contactRow.phone as string | null) ?? null,
+            marketingConsent: Boolean(session?.marketing_consent),
+          }
+        : null,
     }
   })
 

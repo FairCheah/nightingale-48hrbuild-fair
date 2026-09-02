@@ -29,6 +29,11 @@ export interface LeadRow {
   isHighRisk: boolean
   escalationStatus: string | null
   converted: boolean
+  contact: {
+    email: string | null
+    phone: string | null
+    marketingConsent: boolean
+  } | null
 }
 
 function relative(iso: string): string {
@@ -59,8 +64,8 @@ export default function LeadsView({
         </h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--fb-text-soft)' }}>
           {isClinical
-            ? 'You can see clinical concerns where the person consented or asked for a nurse.'
-            : 'Clinical content is hidden from this role.'}
+            ? 'You can see clinical concerns and contact details where the person consented or asked for a nurse.'
+            : 'Clinical content and contact details are hidden from this role.'}
         </p>
 
         {/* ---------------------------------------------- funnel metrics */}
@@ -103,10 +108,7 @@ export default function LeadsView({
                     >
                       {stat.visitors}
                     </td>
-                    <td
-                      className="py-2 text-right"
-                      style={{ color: 'var(--fb-text)' }}
-                    >
+                    <td className="py-2 text-right" style={{ color: 'var(--fb-text)' }}>
                       {stat.conversations}
                     </td>
                     <td
@@ -206,10 +208,7 @@ export default function LeadsView({
                     </p>
 
                     {lead.topConcern && (
-                      <p
-                        className="mt-1.5 text-sm"
-                        style={{ color: 'var(--fb-text)' }}
-                      >
+                      <p className="mt-1.5 text-sm" style={{ color: 'var(--fb-text)' }}>
                         {lead.topConcern}
                       </p>
                     )}
@@ -232,10 +231,7 @@ export default function LeadsView({
                     >
                       {lead.score}
                     </p>
-                    <p
-                      className="text-xs"
-                      style={{ color: 'var(--fb-text-soft)' }}
-                    >
+                    <p className="text-xs" style={{ color: 'var(--fb-text-soft)' }}>
                       {lead.breakdown.recency}r · {lead.breakdown.identity}i ·{' '}
                       {lead.breakdown.stage}s · {lead.breakdown.channel}c
                     </p>
@@ -246,7 +242,8 @@ export default function LeadsView({
                   §5 SAFETY RULE. High-risk clinical content routes to
                   escalation and never to a sales touch. The score stays
                   visible — it is a compassion priority, not a sales one —
-                  but every contact suggestion is suppressed.
+                  but every contact suggestion is suppressed, including for a
+                  person whose details we hold.
                 */}
                 {lead.isHighRisk ? (
                   <p
@@ -260,17 +257,37 @@ export default function LeadsView({
                     through the escalation queue.
                   </p>
                 ) : (
-                  <p
+                  <div
                     className="mt-2 border-t pt-2 text-xs"
                     style={{
                       borderColor: 'var(--fb-border)',
                       color: 'var(--fb-text-soft)',
                     }}
                   >
-                    {lead.converted
-                      ? 'Contactable — consent on file.'
-                      : 'No contact details and no consent. Nothing to send.'}
-                  </p>
+                    {lead.contact ? (
+                      <>
+                        <p style={{ color: 'var(--fb-text)' }}>
+                          {lead.contact.email}
+                          {lead.contact.phone && ` · ${lead.contact.phone}`}
+                        </p>
+                        {/*
+                          §4 and §5. Care contact is permitted once consent
+                          exists. Anything promotional needs the separate,
+                          separately-timestamped marketing consent — which
+                          most people decline, and that is the point.
+                        */}
+                        <p className="mt-0.5">
+                          {lead.contact.marketingConsent
+                            ? 'Care contact and marketing both consented.'
+                            : 'Care contact only. No marketing consent — do not include in campaigns.'}
+                        </p>
+                      </>
+                    ) : lead.converted ? (
+                      <p>Consent on file. Contact details hidden from this role.</p>
+                    ) : (
+                      <p>No contact details and no consent. Nothing to send.</p>
+                    )}
+                  </div>
                 )}
               </li>
             ))}
