@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { sendGuestMessage } from './actions'
+import ProfilePanel, { type MemoryItem } from './ProfilePanel'
 
 export interface ChatMessage {
   id: string
@@ -38,11 +39,13 @@ export default function ChatThread({
   clinicFullName,
   activeRisk,
   activeScope,
+  memoryItems,
 }: {
   initialMessages: ChatMessage[]
   clinicFullName: string
   activeRisk: string | null
   activeScope: string
+  memoryItems: MemoryItem[]
 }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -96,6 +99,12 @@ export default function ChatThread({
           </div>
         </div>
       </header>
+
+      {/* Sits directly under the header so it is reachable on a phone without
+          a sidebar, which would not fit. Collapsed until the person opens it. */}
+      <div className="pt-3">
+        <ProfilePanel items={memoryItems} />
+      </div>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5">
         <p className="mb-5 text-center text-xs leading-relaxed text-[var(--fb-text-soft)]">

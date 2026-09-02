@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getGuestSession, CLINIC_FULL_NAME } from '@/lib/guest'
 import ChatThread, { type ChatMessage } from './ChatThread'
+import { type MemoryItem } from './ProfilePanel'
 
 /**
  * Neutral title by design. The clinic is named prominently inside the
@@ -28,6 +29,13 @@ export default async function ChatPage() {
     .order('created_at', { ascending: true })
 
   const messages = (data ?? []) as ChatMessage[]
+    // Live profile. Ordered so the oldest fact appears first within each kind,
+  // which keeps a superseded item next to the one that replaced it.
+  const { data: memoryRows } = await admin
+    .from('memory_items')
+    .select('id, kind, value, status, timeline, supersedes')
+    .eq('lead_session_id', lead.id)
+    .order('created_at', { ascending: true })
 
   // The banner reflects the most recent assessment, not the whole history —
   // a resolved scare should not leave a red bar pinned forever.
@@ -38,6 +46,7 @@ export default async function ChatPage() {
       initialMessages={messages}
       clinicFullName={CLINIC_FULL_NAME}
       activeRisk={latest?.risk_level ?? null}
+            memoryItems={(memoryRows ?? []) as MemoryItem[]}
       activeScope={
         latest?.risk_reason?.includes('ambiguous_cardiac') ||
         latest?.risk_reason?.includes('ambiguous_neuro')
