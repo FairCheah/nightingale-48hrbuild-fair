@@ -170,12 +170,6 @@ export async function sendToClinic() {
   })
 
   const parsed = parseJsonResponse<SummaryOutput>(raw)
-    // TEMPORARY DIAGNOSTIC — remove before submission.
-  if (!parsed) {
-    console.error(
-      JSON.stringify({ event: 'summary.parse_failed', raw: raw?.slice(0, 400) }),
-    )
-  }
 
   /**
    * If the summariser fails, the escalation still goes through. A nurse

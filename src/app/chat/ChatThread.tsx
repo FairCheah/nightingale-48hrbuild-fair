@@ -43,6 +43,8 @@ export default function ChatThread({
   memoryItems,
   canEscalate,
   alreadyEscalated,
+  showInvite,
+  patientEmail,
 }: {
   initialMessages: ChatMessage[]
   clinicFullName: string
@@ -51,11 +53,13 @@ export default function ChatThread({
   memoryItems: MemoryItem[]
   canEscalate: boolean
   alreadyEscalated: boolean
+  showInvite: boolean
+  patientEmail: string | null
 }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
-    const [sending, setSending] = useState(false)
+  const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -111,7 +115,7 @@ export default function ChatThread({
           >
             N
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-[var(--fb-text)]">
               Nightingale AI
             </p>
@@ -119,6 +123,26 @@ export default function ChatThread({
               {clinicFullName}
             </p>
           </div>
+
+          {/* Signed-in state. Someone who has just handed over their details
+              should see that it registered, and be able to leave. */}
+          {patientEmail && (
+            <div className="shrink-0 text-right">
+              <p
+                className="max-w-[11rem] break-all text-xs font-medium leading-tight sm:max-w-none"
+                style={{ color: 'var(--fb-primary-dk)' }}
+              >
+                {patientEmail}
+              </p>
+              <a
+                href="/logout"
+                className="text-xs underline"
+                style={{ color: 'var(--fb-text-soft)' }}
+              >
+                Sign out
+              </a>
+            </div>
+          )}
         </div>
       </header>
 
@@ -130,13 +154,15 @@ export default function ChatThread({
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5">
         <p className="mb-5 text-center text-xs leading-relaxed text-[var(--fb-text-soft)]">
-          This conversation is private and you don&apos;t need an account.
-          Nightingale is an AI assistant, not a doctor.
+          {patientEmail
+            ? 'Your record is with Fairbloom. Nightingale is an AI assistant, not a doctor.'
+            : "This conversation is private and you don't need an account. Nightingale is an AI assistant, not a doctor."}
         </p>
 
         <ul className="space-y-3">
           {initialMessages.map((message) => {
-            const fromGuest = message.sender === 'guest' || message.sender === 'patient'
+            const fromGuest =
+              message.sender === 'guest' || message.sender === 'patient'
             return (
               <li
                 key={message.id}
@@ -230,6 +256,31 @@ export default function ChatThread({
           </div>
         )}
 
+        {/*
+          Brief §4: authentication triggers on value or clinical intent, not
+          on page landing. This appears only after the person has had a real
+          exchange — and after any escalation, never in front of it. The
+          framing is about being reachable, not about gaining access, because
+          they already have access.
+        */}
+        {showInvite && (
+          <div className="mx-auto w-full max-w-2xl px-4 pt-3">
+            <a
+              href="/continue"
+              className="block w-full rounded-2xl border px-4 py-2.5 text-center text-sm font-medium transition"
+              style={{
+                borderColor: 'var(--fb-primary)',
+                color: 'var(--fb-primary-dk)',
+                backgroundColor: 'rgba(124, 139, 127, 0.08)',
+              }}
+            >
+              {alreadyEscalated
+                ? 'Add a contact so the clinic can reply'
+                : 'Continue securely with Fairbloom'}
+            </a>
+          </div>
+        )}
+
         {alreadyEscalated && (
           <div className="mx-auto w-full max-w-2xl px-4 pt-3">
             <p
@@ -245,6 +296,7 @@ export default function ChatThread({
             </p>
           </div>
         )}
+
         <div className="mx-auto w-full max-w-2xl px-4 pb-3 pt-3">
           {error && (
             <p className="mb-2 text-xs" style={{ color: 'var(--fb-danger)' }}>
