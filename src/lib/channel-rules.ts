@@ -25,6 +25,7 @@ export interface ChannelRule {
   intent: string | null
   opening_strategy: string
   opening_template: string
+  opening_chips: string[] | null
   ask_for_email: boolean
   priority: number
 }
@@ -43,6 +44,11 @@ export interface LeadContext {
 export interface ResolvedOpening {
   opening: string
   strategy: string
+  /**
+   * Tappable prompts for the empty state. Never a substitute for the text
+   * box, which stays visible throughout — the chips are a door, not a menu.
+   */
+  chips: string[]
   askForEmail: boolean
   /** null when the hardcoded fallback was used — useful for tests and logs. */
   ruleId: string | null
@@ -61,7 +67,7 @@ export interface ResolvedOpening {
  * not a runtime crash.
  */
 const FALLBACK_OPENING =
-  "Hi — I'm Nightingale, the assistant for this clinic. " +
+  "Hi — I'm Nightingale, the AI assistant for this clinic. " +
   "You don't need an account to talk to me. " +
   'I can share general information and connect you with the clinic whenever ' +
   "you're ready. What would you like to know?"
@@ -187,7 +193,7 @@ export async function resolveOpening(
   const { data, error } = await admin
     .from('channel_rules')
     .select(
-      'id, source_channel, identity_level, time_of_day, intent, opening_strategy, opening_template, ask_for_email, priority',
+      'id, source_channel, identity_level, time_of_day, intent, opening_strategy, opening_template, opening_chips, ask_for_email, priority',
     )
     .eq('active', true)
     .in('source_channel', [channel, 'default'])
@@ -196,6 +202,7 @@ export async function resolveOpening(
     return {
       opening: FALLBACK_OPENING,
       strategy: 'fallback_generic',
+      chips: [],
       askForEmail: false,
       ruleId: null,
       matchedOn,
@@ -223,6 +230,7 @@ export async function resolveOpening(
     return {
       opening: text,
       strategy: rule.opening_strategy,
+      chips: rule.opening_chips ?? [],
       askForEmail: rule.ask_for_email,
       ruleId: rule.id,
       matchedOn,
@@ -233,6 +241,7 @@ export async function resolveOpening(
   return {
     opening: FALLBACK_OPENING,
     strategy: 'fallback_generic',
+    chips: [],
     askForEmail: false,
     ruleId: null,
     matchedOn,

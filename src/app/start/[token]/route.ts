@@ -109,6 +109,12 @@ export async function GET(
       escalation_required: false,
     })
 
+        // Chips live on the session so the chat page reads them without
+    // re-resolving the rule on every render.
+    await admin
+      .from('lead_sessions')
+      .update({ opening_chips: opening.chips })
+      .eq('id', lead.id)
     await admin.from('audit_logs').insert({
       actor_id: null,
       actor_role: 'system',

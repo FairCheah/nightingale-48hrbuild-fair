@@ -47,6 +47,7 @@ export default function ChatThread({
   patientEmail,
   weeklyStat,
   articulationCard,
+  openingChips,
 }: {
   initialMessages: ChatMessage[]
   clinicFullName: string
@@ -59,6 +60,7 @@ export default function ChatThread({
   patientEmail: string | null
   weeklyStat: string | null
   articulationCard: string | null
+  openingChips: string[]
 }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +69,10 @@ export default function ChatThread({
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+
+  const hasSpoken = initialMessages.some(
+    (m) => m.sender === 'guest' || m.sender === 'patient',
+  )
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -105,6 +111,25 @@ export default function ChatThread({
         setError(result.error)
         setInput(text)
       }
+    })
+  }
+
+  /**
+   * A chip sends its text as an ordinary message. It is not a special kind
+   * of input: the same redaction, risk gating and extraction run on it, and
+   * the transcript reads identically whether they tapped or typed.
+   */
+  function sendChip(text: string) {
+    if (pending) return
+    setError(null)
+
+    startTransition(async () => {
+      const result = await sendGuestMessage(text)
+      if (result?.error === 'expired') {
+        router.push('/link-invalid?reason=expired')
+        return
+      }
+      if (result?.error) setError(result.error)
     })
   }
 
@@ -224,6 +249,35 @@ export default function ChatThread({
           )}
         </ul>
 
+        {/*
+          Opening chips — shown only before the person has said anything.
+          This clinic's subject matter is stigmatised and the hardest part is
+          often typing the first sentence. A chip is a door, not a menu: the
+          text box stays visible throughout, and the wording names a topic
+          rather than a symptom, so a tap can never put a clinical claim in
+          someone's mouth that then lands in their record.
+        */}
+        {openingChips.length > 0 && !hasSpoken && !pending && (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {openingChips.map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => sendChip(chip)}
+                disabled={pending}
+                className="rounded-full border px-3.5 py-2 text-left text-xs transition disabled:opacity-50"
+                style={{
+                  borderColor: 'var(--fb-border)',
+                  backgroundColor: 'var(--fb-surface)',
+                  color: 'var(--fb-text)',
+                }}
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* §2a: unbranded on purpose. Someone can forward this to a partner
             or a parent without disclosing that they contacted a fertility
             clinic. The sharing is the value; attribution would be the cost. */}
@@ -239,7 +293,7 @@ export default function ChatThread({
               className="text-xs font-semibold uppercase tracking-wide"
               style={{ color: 'var(--fb-text-soft)' }}
             >
-              Words you can borrow, if this is hard to explain.
+              Words you can borrow, if this is hard to explain
             </p>
             <p
               className="mt-2 text-sm leading-relaxed"

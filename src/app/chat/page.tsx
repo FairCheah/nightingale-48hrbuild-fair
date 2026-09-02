@@ -91,6 +91,21 @@ export default async function ChatPage() {
    */
   const weeklyStat = await getWeeklyQuestionCount(lead.clinic_id)
 
+  /**
+   * Opening chips, read from the channel rule directly rather than cached on
+   * the session. One source of truth: editing the rules table changes the
+   * chips immediately, with no stale copy to migrate.
+   */
+  const { data: chipRule } = await admin
+    .from('channel_rules')
+    .select('opening_chips')
+    .eq('active', true)
+    .in('source_channel', [lead.source_channel, 'default'])
+    .in('identity_level', [lead.identity_level, 'any'])
+    .not('opening_chips', 'is', null)
+    .order('priority', { ascending: true })
+    .limit(1)
+    .maybeSingle()
   // §2a — the most recent articulation card, if one has been generated.
   const { data: cardRow } = await admin
     .from('value_events')
@@ -112,6 +127,7 @@ export default async function ChatPage() {
       patientEmail={patientEmail}
       weeklyStat={weeklyStat?.text ?? null}
       articulationCard={cardRow?.payload ?? null}
+      openingChips={(chipRule?.opening_chips ?? []) as string[]}
       /* Trigger per §4: real value delivered, not page landing. Gone once
          they have converted — there is nothing left to invite them to. */
       showInvite={
