@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { sendGuestMessage } from './actions'
 import ProfilePanel, { type MemoryItem } from './ProfilePanel'
+import { sendToClinic } from './escalate'
 
 export interface ChatMessage {
   id: string
@@ -40,22 +41,43 @@ export default function ChatThread({
   activeRisk,
   activeScope,
   memoryItems,
+  canEscalate,
+  alreadyEscalated,
 }: {
   initialMessages: ChatMessage[]
   clinicFullName: string
   activeRisk: string | null
   activeScope: string
   memoryItems: MemoryItem[]
+  canEscalate: boolean
+  alreadyEscalated: boolean
 }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+    const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [initialMessages.length, pending])
+
+  function escalate() {
+    if (sending) return
+    setSending(true)
+    setError(null)
+
+    startTransition(async () => {
+      const result = await sendToClinic()
+      if (result?.error === 'expired') {
+        router.push('/link-invalid?reason=expired')
+        return
+      }
+      if (result?.error) setError(result.error)
+      setSending(false)
+    })
+  }
 
   function submit() {
     const text = input.trim()
@@ -176,6 +198,53 @@ export default function ChatThread({
           </div>
         )}
 
+        {/*
+          Brief §8: a SINGLE clear action on Med/High. Scope-gated — we do not
+          offer a Fairbloom nurse for chest pain, consistent with the routing
+          in the reply above it. Deliberately not styled as an emergency: this
+          is a considered step, not a panic button.
+        */}
+        {canEscalate && activeScope !== 'out_of_scope' && (
+          <div className="mx-auto w-full max-w-2xl px-4 pt-3">
+            <button
+              type="button"
+              onClick={escalate}
+              disabled={sending || pending}
+              className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-50"
+              style={{ backgroundColor: 'var(--fb-safe)' }}
+            >
+              {sending
+                ? 'Sending…'
+                : activeRisk === 'high'
+                  ? 'Also let Fairbloom know'
+                  : 'Send this to a nurse at Fairbloom'}
+            </button>
+            <p
+              className="mt-1.5 text-center text-xs leading-snug"
+              style={{ color: 'var(--fb-text-soft)' }}
+            >
+              {activeRisk === 'high'
+                ? 'This is not your emergency route — call 999 for that. It lets the clinic know what happened and follow up with you.'
+                : 'A real person reviews it within 12–18 hours. You can keep chatting.'}
+            </p>
+          </div>
+        )}
+
+        {alreadyEscalated && (
+          <div className="mx-auto w-full max-w-2xl px-4 pt-3">
+            <p
+              className="rounded-2xl px-4 py-2.5 text-center text-xs"
+              style={{
+                backgroundColor: 'rgba(111, 143, 132, 0.12)',
+                color: 'var(--fb-primary-dk)',
+              }}
+            >
+              {activeRisk === 'high'
+                ? 'Fairbloom has recorded this. It seems like an emergency. Call 999 or go to a hospital emergency department now.'
+                : 'A nurse at Fairbloom has this and will review it within 12–18 hours.'}
+            </p>
+          </div>
+        )}
         <div className="mx-auto w-full max-w-2xl px-4 pb-3 pt-3">
           {error && (
             <p className="mb-2 text-xs" style={{ color: 'var(--fb-danger)' }}>

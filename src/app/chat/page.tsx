@@ -40,6 +40,14 @@ export default async function ChatPage() {
   // The banner reflects the most recent assessment, not the whole history —
   // a resolved scare should not leave a red bar pinned forever.
   const latest = [...messages].reverse().find((m) => m.sender === 'guest')
+    // Has a case already been opened? A second press must not create a second.
+  const { data: openCase } = await admin
+    .from('escalations')
+    .select('id')
+    .eq('lead_session_id', lead.id)
+    .in('status', ['pending', 'in_review'])
+    .limit(1)
+    .maybeSingle()
 
   return (
     <ChatThread
@@ -47,6 +55,8 @@ export default async function ChatPage() {
       clinicFullName={CLINIC_FULL_NAME}
       activeRisk={latest?.risk_level ?? null}
             memoryItems={(memoryRows ?? []) as MemoryItem[]}
+                  canEscalate={Boolean(latest?.escalation_required) && !openCase}
+      alreadyEscalated={Boolean(openCase)}
       activeScope={
         latest?.risk_reason?.includes('ambiguous_cardiac') ||
         latest?.risk_reason?.includes('ambiguous_neuro')
