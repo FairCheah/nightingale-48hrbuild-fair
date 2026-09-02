@@ -165,7 +165,14 @@ export async function sendGuestMessage(content: string) {
       sender: 'ai',
       // Markers are stripped from the visible text; the citations table
       // holds the link. The reader gets prose, the record gets provenance.
-      content: reply.replace(/\s*\[[a-z]+-\d+\]/gi, ''),
+      // Strip our id markers, and any markdown link the model produced
+      // despite being told not to — a raw URL in a patient-facing message
+      // is worse than a missing citation.
+      content: reply
+        .replace(/\s*\[[a-z]+-\d+\]\([^)]*\)/gi, '')
+        .replace(/\s*\[[^\]]+\]\(https?:\/\/[^)]*\)/gi, '')
+        .replace(/\s*\[[a-z]+-\d+\]/gi, '')
+        .trim(),
       redaction_applied: false,
       risk_level: risk.level,
       risk_reason: risk.reason,

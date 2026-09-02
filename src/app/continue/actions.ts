@@ -192,7 +192,12 @@ export async function convertGuestToPatient(input: ConversionInput) {
 
   await admin
     .from('lead_sessions')
-    .update({ lifecycle_status: 'converted', last_active_at: now })
+    .update({
+      lifecycle_status: 'converted',
+      last_active_at: now,
+      // Consent given: the clinic may now read what they wrote as a guest.
+      staff_visible: input.consentMigrate,
+    })
     .eq('id', lead.id)
 
   for (const type of ['consented', 'patient_created']) {

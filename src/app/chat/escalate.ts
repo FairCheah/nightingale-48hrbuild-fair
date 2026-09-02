@@ -233,7 +233,12 @@ export async function sendToClinic() {
 
   await admin
     .from('lead_sessions')
-    .update({ top_concern: topConcern, last_active_at: new Date().toISOString() })
+    .update({
+      top_concern: topConcern,
+      last_active_at: new Date().toISOString(),
+      // Asking for a human is consent to be read by one.
+      staff_visible: true,
+    })
     .eq('id', lead.id)
 
   /**
