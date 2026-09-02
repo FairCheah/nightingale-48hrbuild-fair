@@ -52,6 +52,7 @@ const FOREIGN_ID_PATTERN = /\b[A-Z]\d{7}[A-Z]\b/g
  * Requires a leading 0 or +60 so it cannot swallow ages, dates or dosages.
  */
 const PHONE_PATTERN = /(?:\+?60[-\s]?|0)\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4}\b/g
+
 const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g
 
 /**

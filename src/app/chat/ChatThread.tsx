@@ -29,7 +29,7 @@ const HIGH_BANNER = 'Call 999 or visit the nearest HOSPITAL EMERGENCY DEPARTMENT
 const MED_BANNERS: Record<string, string> = {
   in_scope: 'This needs a clinician to look at — I can pass it to a Fairbloom nurse.',
   out_of_scope:
-    'This is outside what Fairbloom treats. Please see a GP, or a hospital emergency department if it worsens.',
+    'This is outside of what Fairbloom treats. Please see a GP, or a hospital emergency department if it worsens.',
   unclear: 'This needs a clinician. Tell me a little more so I can point you to the right one.',
 }
 

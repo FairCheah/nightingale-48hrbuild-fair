@@ -4,7 +4,9 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getGuestSession, checkRateLimit } from '@/lib/guest'
 import { safeRedact } from '@/lib/redaction'
-import { assessKeywordRisk, EMERGENCY_SCRIPTS } from '@/lib/risk'
+import { assessKeywordRisk, combineRisk, EMERGENCY_SCRIPTS } from '@/lib/risk'
+import { classifyRisk, generateReply } from '@/lib/nightingale-ai'
+import type { LlmTurn } from '@/lib/llm'
 
 /**
  * SEND MESSAGE — the single write path for guest conversation.
@@ -73,10 +75,20 @@ export async function sendGuestMessage(content: string) {
     return { error: 'Something went wrong saving your message. Please try again.' }
   }
 
-  // 5. RISK GATE — computed on the raw text, before any reply exists.
-  //    Keyword floor only for now; the LLM classifier joins via combineRisk()
-  //    in the next step and may only ever raise this level, never lower it.
-  const risk = assessKeywordRisk(text)
+  // 5. RISK GATE — before any reply exists.
+  //
+  //    Layer 1 runs on the RAW text: keyword matching is local, instant, and
+  //    placeholders must not break a phrase match.
+  //    Layer 2 sends only REDACTED text to the model.
+  //    combineRisk() takes the higher of the two — the model can raise the
+  //    floor but never lower it, and a null (timeout, outage, bad JSON)
+  //    leaves the keyword verdict standing.
+  const keywordRisk = assessKeywordRisk(text)
+
+  const history = await loadRedactedHistory(admin, lead.id, redaction.redacted)
+
+  const llmRisk = await classifyRisk(history)
+  const risk = combineRisk(keywordRisk, llmRisk)
 
   // The risk verdict is stamped on the GUEST message, because it describes
   // what the patient said. This is what test_risk_escalation asserts on.
@@ -128,10 +140,17 @@ export async function sendGuestMessage(content: string) {
         'Would you like me to?'
     }
   } else {
+    const generated = await generateReply(history, {
+      referralTopic: lead.referral_topic,
+    })
+
+    // Honest degradation. If the model is down we say so rather than
+    // improvising clinical-sounding text from a template.
     reply =
-      'Thanks for telling me that. My conversational replies are still being ' +
-      'connected — for now I am recording what you say so nothing gets lost. ' +
-      'If anything feels urgent, please use the emergency guidance below.'
+      generated ??
+      'I am having trouble reaching my language service just now, so I would ' +
+        'rather not guess at an answer. Your message is saved. Please try ' +
+        'again in a moment, or I can pass this to the clinic for you.'
   }
 
   const { data: aiMessage } = await admin
@@ -178,10 +197,54 @@ export async function sendGuestMessage(content: string) {
             risk_level: risk.level,
       risk_matched: risk.matched,
       risk_source: risk.source,
+      llm_classifier_available: llmRisk !== null,
       reply_id: aiMessage?.id ?? null,
     },
   })
 
   revalidatePath('/chat')
   return { ok: true }
+}
+
+/**
+ * Build the model's view of the conversation: REDACTED text only, ever.
+ *
+ * The last ~10 turns are included because crisis frequently develops across
+ * messages rather than appearing in one — the classifier needs trajectory,
+ * not a single line. The message just written is appended from memory since
+ * the row may not have replicated yet.
+ */
+async function loadRedactedHistory(
+  admin: ReturnType<typeof createAdminClient>,
+  leadSessionId: string,
+  latestRedacted: string,
+): Promise<LlmTurn[]> {
+  const { data } = await admin
+    .from('messages')
+    .select('sender, content, content_redacted, created_at')
+    .eq('lead_session_id', leadSessionId)
+    .order('created_at', { ascending: false })
+    .limit(11)
+
+  const rows = (data ?? []).reverse()
+
+  const turns: LlmTurn[] = rows
+    // Drop the row we just inserted; it is appended below from memory.
+    .slice(0, -1)
+    .map((row) => ({
+      role: row.sender === 'ai' ? ('model' as const) : ('user' as const),
+      // Guest text uses the redacted column. Assistant text was never PHI.
+      text:
+        row.sender === 'ai'
+          ? (row.content ?? '')
+          : (row.content_redacted ?? '[withheld]'),
+    }))
+    .filter((turn) => turn.text.length > 0)
+
+  turns.push({ role: 'user', text: latestRedacted })
+
+  // Gemini rejects a history that does not start with a user turn.
+  while (turns.length > 0 && turns[0].role !== 'user') turns.shift()
+
+  return turns
 }
