@@ -9,14 +9,40 @@ export interface ChatMessage {
   sender: string
   content: string
   created_at: string
+  risk_level: string | null
+  risk_reason: string | null
+  escalation_required: boolean
+}
+
+/**
+ * Banner copy lives here rather than in risk.ts because risk.ts is a
+ * server module; importing it into a client component would pull the
+ * whole rule set into the browser bundle.
+ */
+const HIGH_BANNER = 'Call 999 or visit the nearest HOSPITAL EMERGENCY DEPARTMENT'
+
+/**
+ * The medium banner must agree with what the assistant just said. Offering a
+ * Fairbloom nurse under a message explaining that Fairbloom cannot help would
+ * be the same false safety net, moved to a different part of the screen.
+ */
+const MED_BANNERS: Record<string, string> = {
+  in_scope: 'This needs a clinician to look at — I can pass it to a Fairbloom nurse.',
+  out_of_scope:
+    'This is outside what Fairbloom treats. Please see a GP, or a hospital emergency department if it worsens.',
+  unclear: 'This needs a clinician. Tell me a little more so I can point you to the right one.',
 }
 
 export default function ChatThread({
   initialMessages,
   clinicFullName,
+  activeRisk,
+  activeScope,
 }: {
   initialMessages: ChatMessage[]
   clinicFullName: string
+  activeRisk: string | null
+  activeScope: string
 }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -97,7 +123,7 @@ export default function ChatThread({
                         }
                   }
                 >
-                  {message.content}
+                  <span className="whitespace-pre-wrap">{message.content}</span>
                 </div>
               </li>
             )
@@ -116,6 +142,31 @@ export default function ChatThread({
       </main>
 
       <footer className="sticky bottom-0 border-t border-[var(--fb-border)] bg-[var(--fb-surface)]">
+        {/* Risk banner sits ABOVE the composer so it cannot be scrolled past.
+            Input stays enabled deliberately: a frightened person who cannot
+            type feels abandoned. We stop giving advice, not listening. */}
+        {activeRisk === 'high' && (
+          <div
+            className="px-4 py-3 text-center text-sm font-semibold leading-snug text-white"
+            style={{ backgroundColor: 'var(--fb-danger)' }}
+          >
+            {HIGH_BANNER}
+          </div>
+        )}
+
+        {activeRisk === 'med' && (
+          <div
+            className="border-b px-4 py-2.5 text-center text-xs leading-snug"
+            style={{
+              backgroundColor: 'var(--fb-muted)',
+              borderColor: 'var(--fb-border)',
+              color: 'var(--fb-text)',
+            }}
+          >
+            {MED_BANNERS[activeScope] ?? MED_BANNERS.in_scope}
+          </div>
+        )}
+
         <div className="mx-auto w-full max-w-2xl px-4 pb-3 pt-3">
           {error && (
             <p className="mb-2 text-xs" style={{ color: 'var(--fb-danger)' }}>

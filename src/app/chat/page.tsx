@@ -23,14 +23,29 @@ export default async function ChatPage() {
 
   const { data } = await admin
     .from('messages')
-    .select('id, sender, content, created_at')
+    .select('id, sender, content, created_at, risk_level, escalation_required, risk_reason')
     .eq('lead_session_id', lead.id)
     .order('created_at', { ascending: true })
 
+  const messages = (data ?? []) as ChatMessage[]
+
+  // The banner reflects the most recent assessment, not the whole history —
+  // a resolved scare should not leave a red bar pinned forever.
+  const latest = [...messages].reverse().find((m) => m.sender === 'guest')
+
   return (
     <ChatThread
-      initialMessages={(data ?? []) as ChatMessage[]}
+      initialMessages={messages}
       clinicFullName={CLINIC_FULL_NAME}
+      activeRisk={latest?.risk_level ?? null}
+      activeScope={
+        latest?.risk_reason?.includes('ambiguous_cardiac') ||
+        latest?.risk_reason?.includes('ambiguous_neuro')
+          ? 'out_of_scope'
+          : latest?.risk_reason?.includes('severe_pain')
+            ? 'unclear'
+            : 'in_scope'
+      }
     />
   )
 }
