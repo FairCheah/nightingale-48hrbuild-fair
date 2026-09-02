@@ -303,10 +303,18 @@ async function loadRedactedHistory(
     .slice(0, -1)
     .map((row) => ({
       role: row.sender === 'ai' ? ('model' as const) : ('user' as const),
-      // Guest text uses the redacted column. Assistant text was never PHI.
+      /**
+       * Guest text uses the redacted column.
+       *
+       * Assistant text is redacted too, which is not obvious. Our own channel
+       * opening interpolates the person's social handle from the rules table —
+       * so an unredacted assistant turn would send @their_handle to the model
+       * even though the guest never typed it. Redacting both directions closes
+       * that, and costs nothing where there is nothing to redact.
+       */
       text:
         row.sender === 'ai'
-          ? (row.content ?? '')
+          ? safeRedact(row.content ?? '').redacted
           : (row.content_redacted ?? '[withheld]'),
     }))
     .filter((turn) => turn.text.length > 0)

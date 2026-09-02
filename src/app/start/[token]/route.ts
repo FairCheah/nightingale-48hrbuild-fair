@@ -5,6 +5,7 @@ import {
   GUEST_COOKIE_MAX_AGE,
   isGuestSessionExpired,
 } from '@/lib/retention'
+import { resolveOpening } from '@/lib/channel-rules'
 
 /**
  * GUEST LANDING — /start/{recovery_token}
@@ -55,6 +56,73 @@ export async function GET(
     .from('lead_sessions')
     .update({ last_active_at: now, lifecycle_status: 'active' })
     .eq('id', lead.id)
+      /**
+   * THE OPENING (§3).
+   *
+   * Seeded once, on first arrival. Persisted as a real assistant message so
+   * it survives a refresh and appears in the transcript a clinician reads.
+   *
+   * This is where the declarative channel_rules table does its work: a
+   * handle_only arrival from a comment gets a different first sentence from
+   * a staff_referral, with no if-statement about channels anywhere in the
+   * application code.
+   */
+  const { count: existingMessages } = await admin
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('lead_session_id', lead.id)
+
+  if (!existingMessages) {
+    const { data: full } = await admin
+      .from('lead_sessions')
+      .select(
+        'source_channel, identity_level, referral_topic, social_handle, page_context, campaign_id',
+      )
+      .eq('id', lead.id)
+      .single()
+
+    const { data: clinic } = await admin
+      .from('clinics')
+      .select('name')
+      .eq('id', lead.clinic_id ?? '')
+      .maybeSingle()
+
+    const opening = await resolveOpening({
+      source_channel: full?.source_channel ?? lead.source_channel,
+      identity_level: full?.identity_level ?? lead.identity_level,
+      referral_topic: full?.referral_topic,
+      social_handle: full?.social_handle,
+      page_context: full?.page_context,
+      campaign_id: full?.campaign_id,
+      clinic_name: clinic?.name ?? 'the clinic',
+    })
+
+    await admin.from('messages').insert({
+      lead_session_id: lead.id,
+      sender: 'ai',
+      content: opening.opening,
+      redaction_applied: false,
+      risk_level: 'low',
+      risk_reason: `channel opening: ${opening.strategy}`,
+      confidence: 'high',
+      risk_provenance: now,
+      escalation_required: false,
+    })
+
+    await admin.from('audit_logs').insert({
+      actor_id: null,
+      actor_role: 'system',
+      action: 'channel_rule.applied',
+      resource_type: 'lead_session',
+      resource_id: lead.id,
+      metadata: {
+        rule_id: opening.ruleId,
+        strategy: opening.strategy,
+        matched_on: opening.matchedOn,
+        used_fallback: opening.usedFallback,
+      },
+    })
+  }
 
   // Funnel event. Metadata only — no message text, topic or handle.
   await admin.from('events').insert({

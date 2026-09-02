@@ -19,7 +19,7 @@
  * the real thing. Only content_redacted travels to the LLM.
  */
 
-export type PhiKind = 'NAME' | 'IC' | 'PHONE' | 'EMAIL'
+export type PhiKind = 'NAME' | 'IC' | 'PHONE' | 'EMAIL' | 'HANDLE'
 
 export interface RedactionHit {
   kind: PhiKind
@@ -54,6 +54,15 @@ const FOREIGN_ID_PATTERN = /\b[A-Z]\d{7}[A-Z]\b/g
 const PHONE_PATTERN = /(?:\+?60[-\s]?|0)\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4}\b/g
 
 const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g
+/**
+ * Social handles. Not PHI in the strict sense — a handle is a public name the
+ * person chose — but it identifies them, and pairing an identifier with a
+ * health interest is the whole risk. We know their handle only because they
+ * commented publicly; that is not a reason to hand it to a model.
+ *
+ * Requires a leading @ so it cannot swallow ordinary words.
+ */
+const HANDLE_PATTERN = /@[A-Za-z0-9._]{2,30}\b/g
 
 /**
  * Names are the hard case: there is no reliable pattern for "a name", and
@@ -104,6 +113,7 @@ export function redactPhi(text: string): RedactionResult {
     ...collect(text, FOREIGN_ID_PATTERN, 'IC'),
     ...collect(text, PHONE_PATTERN, 'PHONE'),
     ...collect(text, EMAIL_PATTERN, 'EMAIL'),
+        ...collect(text, HANDLE_PATTERN, 'HANDLE'),
     ...NAME_PATTERNS.flatMap((p) => collect(text, p, 'NAME')),
   ]
 
@@ -118,7 +128,13 @@ export function redactPhi(text: string): RedactionResult {
     }
   }
 
-  const counters: Record<PhiKind, number> = { NAME: 0, IC: 0, PHONE: 0, EMAIL: 0 }
+  const counters: Record<PhiKind, number> = {
+    NAME: 0,
+    IC: 0,
+    PHONE: 0,
+    EMAIL: 0,
+    HANDLE: 0,
+  }
   const hits: RedactionHit[] = []
   let out = ''
   let last = 0
