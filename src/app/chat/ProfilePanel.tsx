@@ -50,8 +50,11 @@ export default function ProfilePanel({ items }: { items: MemoryItem[] }) {
   if (items.length === 0) return null
 
   // Retired rows keep their place in the record but are marked as past.
-  const current = items.filter((i) => i.status === 'active')
-  const retired = items.filter((i) => i.status !== 'active')
+  const supersededIds = new Set(
+    items.map((i) => i.supersedes).filter(Boolean),
+  )
+  const current = items.filter((i) => !supersededIds.has(i.id))
+  const retired = items.filter((i) => supersededIds.has(i.id))
 
   const grouped = KIND_ORDER.map((kind) => ({
     kind,
@@ -65,16 +68,21 @@ export default function ProfilePanel({ items }: { items: MemoryItem[] }) {
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-left text-xs transition"
+        /**
+         * Deliberately not styled like a message. Sage-tinted with a dashed
+         * border so it reads as an instrument panel rather than something
+         * Nightingale said — a record about you, not a turn in the chat.
+         */
+        className="flex w-full items-center justify-between rounded-xl border border-dashed px-4 py-2.5 text-left text-xs transition"
         style={{
-          borderColor: 'var(--fb-border)',
-          backgroundColor: 'var(--fb-surface)',
-          color: 'var(--fb-text-soft)',
+          borderColor: 'var(--fb-primary)',
+          backgroundColor: 'rgba(124, 139, 127, 0.08)',
+          color: 'var(--fb-primary-dk)',
         }}
       >
         <span>
           What I&apos;ve noted so far
-          <span className="ml-2 font-medium" style={{ color: 'var(--fb-text)' }}>
+          <span className="ml-2 font-semibold" style={{ color: 'var(--fb-primary-dk)' }}>
             {current.length}
             {retired.length > 0 ? ` (+${retired.length} updated)` : ''}
           </span>
@@ -84,10 +92,10 @@ export default function ProfilePanel({ items }: { items: MemoryItem[] }) {
 
       {open && (
         <div
-          className="mt-2 rounded-xl border px-4 py-3"
+          className="mt-2 rounded-xl border border-dashed px-4 py-3"
           style={{
-            borderColor: 'var(--fb-border)',
-            backgroundColor: 'var(--fb-surface)',
+            borderColor: 'var(--fb-primary)',
+            backgroundColor: 'rgba(124, 139, 127, 0.06)',
           }}
         >
           <p className="mb-3 text-xs leading-relaxed" style={{ color: 'var(--fb-text-soft)' }}>
@@ -106,7 +114,14 @@ export default function ProfilePanel({ items }: { items: MemoryItem[] }) {
                 </dt>
                 <dd className="mt-1 space-y-1">
                   {group.items.map((item) => {
-                    const isPast = item.status !== 'active'
+                    /**
+                     * Only rows that have been REPLACED are struck through.
+                     * A stopped medication is not history — it is a current
+                     * fact with a status. "Advil, stopped last week" is what
+                     * a clinician needs to read; crossing it out would say
+                     * "no medications", which is a different clinical picture.
+                     */
+                    const isPast = items.some((other) => other.supersedes === item.id)
                     return (
                       <div
                         key={item.id}
@@ -126,7 +141,7 @@ export default function ProfilePanel({ items }: { items: MemoryItem[] }) {
                             — {item.timeline}
                           </span>
                         )}
-                        {isPast && STATUS_LABELS[item.status] && (
+                        {STATUS_LABELS[item.status] && (
                           <span
                             className="ml-2 rounded px-1.5 py-0.5 text-xs"
                             style={{
