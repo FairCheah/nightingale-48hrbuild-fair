@@ -1,0 +1,11 @@
+{
+  "name": "Secure message",
+  "short_name": "Secure message",
+  "description": "A private space to ask a clinic a question.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf6f5",
+  "theme_color": "#7c8b7f",
+  "orientation": "portrait"
+}
