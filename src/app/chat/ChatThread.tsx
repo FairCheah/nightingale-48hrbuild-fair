@@ -17,6 +17,17 @@ export interface ChatMessage {
 }
 
 /**
+ * A source the assistant actually used, per §6. Only ids the model was given
+ * are ever stored, so a citation here always resolves to a real span.
+ */
+export interface Citation {
+  message_id: string
+  source_title: string
+  source_org: string
+  source_url: string | null
+}
+
+/**
  * Banner copy lives here rather than in risk.ts because risk.ts is a
  * server module; importing it into a client component would pull the
  * whole rule set into the browser bundle.
@@ -48,6 +59,7 @@ export default function ChatThread({
   weeklyStat,
   articulationCard,
   openingChips,
+  citations,
 }: {
   initialMessages: ChatMessage[]
   clinicFullName: string
@@ -61,6 +73,7 @@ export default function ChatThread({
   weeklyStat: string | null
   articulationCard: string | null
   openingChips: string[]
+  citations: Citation[]
 }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -217,6 +230,10 @@ export default function ChatThread({
           {initialMessages.map((message) => {
             const fromGuest =
               message.sender === 'guest' || message.sender === 'patient'
+            const messageCitations = citations.filter(
+              (c) => c.message_id === message.id,
+            )
+
             return (
               <li
                 key={message.id}
@@ -235,6 +252,38 @@ export default function ChatThread({
                   }
                 >
                   <span className="whitespace-pre-wrap">{message.content}</span>
+
+                  {/* §6: low-risk education comes with its source. Shown
+                      under the message rather than inline, so the prose stays
+                      readable and the provenance stays visible. */}
+                  {!fromGuest && messageCitations.length > 0 && (
+                    <span
+                      className="mt-2 block border-t pt-2 text-xs"
+                      style={{
+                        borderColor: 'var(--fb-border)',
+                        color: 'var(--fb-text-soft)',
+                      }}
+                    >
+                      {messageCitations.map((citation, i) => (
+                        <span key={i} className="block">
+                          {citation.source_url ? (
+                            <a
+                              href={citation.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline"
+                            >
+                              {citation.source_org} — {citation.source_title}
+                            </a>
+                          ) : (
+                            <>
+                              {citation.source_org} — {citation.source_title}
+                            </>
+                          )}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </div>
               </li>
             )

@@ -1,5 +1,6 @@
 import { callLlm, parseJsonResponse, type LlmTurn } from '@/lib/llm'
 import type { EmergencyKind, RiskLevel } from '@/lib/risk'
+import { retrieve, type KnowledgeEntry } from '@/lib/knowledge'
 
 /**
  * NIGHTINGALE AI — the two model calls, and the prompts that constrain them.
@@ -119,6 +120,12 @@ WHAT YOU MUST NOT DO
 - Never invent clinic-specific facts: prices, appointment slots, staff names, wait times, success rates. If you do not know, say you do not know and offer to pass the question to the clinic.
 - Never offer to do something you cannot do. You cannot book appointments, check availability, access records, or contact anyone on the person's behalf. The one action you can take is passing what they have told you to a nurse at the clinic. Do not say "would it help to book an appointment" — say they can ask the clinic about booking, or offer to pass their question along.
 
+GROUNDING
+When source material is supplied below, prefer it over your own recall for any factual claim, and mark the claim with its id in square brackets like [fert-01] at the end of the sentence it supports. Use an id only where that entry genuinely supports what you wrote.
+
+If no source material is supplied, do not invent one and do not use bracket markers. Answer more generally instead, or say the clinic can tell them more.
+
+Never write a source name, a URL, or a citation of your own. The system attaches those from the id.
 WHAT YOU DO WELL
 - Answer general questions about fertility, women's health and sexual health at the level of a good public-health leaflet.
 - Explain what a procedure or test generally involves, and what questions are worth asking a clinician.
@@ -138,18 +145,49 @@ Names and identifiers appear as placeholders like [NAME_1]. Never echo a placeho
  *
  * Takes REDACTED text only.
  */
+/**
+ * The low-risk conversational reply, grounded where we hold source material.
+ *
+ * Returns the text plus the entries that were offered, so the caller can
+ * persist a citation row for each id the model actually used. A model can
+ * only cite what it was given, which is the whole point — an id it did not
+ * receive cannot appear, and an id it invented resolves to nothing and is
+ * dropped.
+ *
+ * Takes REDACTED text only.
+ */
 export async function generateReply(
   redactedHistory: LlmTurn[],
   context?: { referralTopic?: string | null },
-): Promise<string | null> {
-  const system = context?.referralTopic
+): Promise<{ text: string; offered: KnowledgeEntry[] } | null> {
+  // Retrieve against the person's own words, not the whole transcript.
+  const lastUserTurn =
+    [...redactedHistory].reverse().find((t) => t.role === 'user')?.text ?? ''
+
+  const offered = retrieve(
+    `${lastUserTurn} ${context?.referralTopic ?? ''}`,
+  )
+
+  let system = context?.referralTopic
     ? `${REPLY_SYSTEM}\n\nCONTEXT: the ${CLINIC} care team noted this person asked about "${context.referralTopic}". Do not make them repeat it.`
     : REPLY_SYSTEM
 
-  return callLlm({
+  if (offered.length > 0) {
+    const material = offered
+      .map((entry) => `[${entry.id}] ${entry.text}`)
+      .join('\n')
+
+    system += `\n\nSOURCE MATERIAL — use these for factual claims and mark them by id:\n${material}`
+  }
+
+  const text = await callLlm({
     system,
     turns: redactedHistory,
     temperature: 0.5,
     maxOutputTokens: 400,
   })
+
+  if (!text) return null
+
+  return { text, offered }
 }

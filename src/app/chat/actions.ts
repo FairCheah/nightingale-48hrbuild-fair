@@ -9,6 +9,7 @@ import { classifyRisk, generateReply } from '@/lib/nightingale-ai'
 import type { LlmTurn } from '@/lib/llm'
 import { extractFacts, type ExistingFact } from '@/lib/memory'
 import { generateArticulationCard, recordValueEvent } from '@/lib/value-events'
+import type { KnowledgeEntry } from '@/lib/knowledge'
 
 /**
  * SEND MESSAGE — the single write path for guest conversation.
@@ -109,6 +110,7 @@ export async function sendGuestMessage(content: string) {
   //    hedging — only the script for that emergency kind. Brief §6 forbids
   //    advice and false reassurance once risk is high.
   let reply: string
+  let grounding: KnowledgeEntry[] = []
 
   if (risk.level === 'high' && risk.emergencyKind) {
     reply = EMERGENCY_SCRIPTS[risk.emergencyKind].body
@@ -149,18 +151,21 @@ export async function sendGuestMessage(content: string) {
     // Honest degradation. If the model is down we say so rather than
     // improvising clinical-sounding text from a template.
     reply =
-      generated ??
+      generated?.text ??
       'I am having trouble reaching my language service just now, so I would ' +
         'rather not guess at an answer. Your message is saved. Please try ' +
         'again in a moment, or I can pass this to the clinic for you.'
-  }
 
+    grounding = generated?.offered ?? []
+  }
   const { data: aiMessage } = await admin
     .from('messages')
     .insert({
       lead_session_id: lead.id,
       sender: 'ai',
-      content: reply,
+      // Markers are stripped from the visible text; the citations table
+      // holds the link. The reader gets prose, the record gets provenance.
+      content: reply.replace(/\s*\[[a-z]+-\d+\]/gi, ''),
       redaction_applied: false,
       risk_level: risk.level,
       risk_reason: risk.reason,
@@ -176,6 +181,39 @@ export async function sendGuestMessage(content: string) {
       // 6b. LIVING MEMORY. Runs after the reply so a slow extraction never
   //     delays the patient's answer, and never blocks an emergency script.
   //     Failure here degrades the profile, not the conversation.
+    /**
+   * 6a. CITATIONS.
+   *
+   * A row per source the model actually used. We parse the [id] markers out
+   * of the reply and match them against what we offered — an id we did not
+   * supply cannot resolve, so a hallucinated citation is dropped rather than
+   * stored. That is what makes "citations resolve to real spans" true rather
+   * than asserted.
+   *
+   * The marker is stripped from the displayed text; the citation is rendered
+   * separately, so the person reads prose and the record keeps the link.
+   */
+  if (aiMessage?.id && grounding.length > 0) {
+    const used = new Set(
+      [...reply.matchAll(/\[([a-z]+-\d+)\]/gi)].map((m) => m[1].toLowerCase()),
+    )
+
+    const cited = grounding.filter((entry) => used.has(entry.id.toLowerCase()))
+
+    for (const entry of cited) {
+      await admin.from('citations').insert({
+        message_id: aiMessage.id,
+        source_title: entry.sourceTitle,
+        source_url: entry.sourceUrl,
+        source_org: entry.sourceOrg,
+        // The exact sentence the claim came from, so a reviewer can compare
+        // it against what the assistant wrote.
+        quoted_span: entry.text,
+        span_start: 0,
+        span_end: entry.text.length,
+      })
+    }
+  }
   const memoryResult = await updateMemory(
     admin,
     lead.id,

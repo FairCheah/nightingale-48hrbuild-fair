@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getGuestSession, CLINIC_FULL_NAME } from '@/lib/guest'
 import { getWeeklyQuestionCount } from '@/lib/value-events'
-import ChatThread, { type ChatMessage } from './ChatThread'
+import ChatThread, { type ChatMessage, type Citation } from './ChatThread'
 import { type MemoryItem } from './ProfilePanel'
 
 /**
@@ -106,6 +106,17 @@ export default async function ChatPage() {
     .order('priority', { ascending: true })
     .limit(1)
     .maybeSingle()
+
+  // §6 — citations, keyed by message so each assistant turn shows its own
+  // sources. Only ids the model was actually given are ever stored.
+  const { data: citationRows } = await admin
+    .from('citations')
+    .select('message_id, source_title, source_org, source_url')
+    .in(
+      'message_id',
+      messages.map((m) => m.id),
+    )
+
   // §2a — the most recent articulation card, if one has been generated.
   const { data: cardRow } = await admin
     .from('value_events')
@@ -128,6 +139,7 @@ export default async function ChatPage() {
       weeklyStat={weeklyStat?.text ?? null}
       articulationCard={cardRow?.payload ?? null}
       openingChips={(chipRule?.opening_chips ?? []) as string[]}
+      citations={(citationRows ?? []) as Citation[]}
       /* Trigger per §4: real value delivered, not page landing. Gone once
          they have converted — there is nothing left to invite them to. */
       showInvite={
