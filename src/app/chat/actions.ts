@@ -8,6 +8,7 @@ import { assessKeywordRisk, combineRisk, EMERGENCY_SCRIPTS } from '@/lib/risk'
 import { classifyRisk, generateReply } from '@/lib/nightingale-ai'
 import type { LlmTurn } from '@/lib/llm'
 import { extractFacts, type ExistingFact } from '@/lib/memory'
+import { generateArticulationCard, recordValueEvent } from '@/lib/value-events'
 
 /**
  * SEND MESSAGE — the single write path for guest conversation.
@@ -181,6 +182,61 @@ export async function sendGuestMessage(content: string) {
     guestMessage.id,
     history,
   ).catch(() => ({ extracted: 0, superseded: 0 }))
+    /**
+   * 6c. VALUE EVENTS (§2).
+   *
+   * The articulation card is offered once, after the person has said enough
+   * that we know what it is about, and only when the conversation is calm.
+   * Offering a shareable card to someone mid-emergency would be grotesque.
+   */
+  /**
+   * Offered once, when the conversation is calm and we know enough about
+   * what it concerns. Gated on the profile having any content rather than
+   * on this turn producing new facts — a person can say something worth a
+   * card without adding to the record.
+   */
+  const { count: factCount } = await admin
+    .from('memory_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('lead_session_id', lead.id)
+
+  if (risk.level === 'low' && (factCount ?? 0) > 0) {
+    const { count: alreadyOffered } = await admin
+      .from('value_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('lead_session_id', lead.id)
+      .eq('value_type', 'articulation_card')
+
+    if (!alreadyOffered) {
+      const context = history
+        .slice(-4)
+        .map((t) => `${t.role === 'model' ? 'ASSISTANT' : 'PERSON'}: ${t.text}`)
+        .join('\n')
+
+      const articulation = await generateArticulationCard(context)
+
+      if (articulation) {
+        await recordValueEvent({
+          clinicId: lead.clinic_id,
+          leadSessionId: lead.id,
+          messageId: aiMessage?.id ?? null,
+          valueType: 'articulation_card',
+          payload: articulation.text,
+        })
+      }
+    }
+  }
+
+  // Every substantive low-risk answer is itself a value event, logged
+  // explicitly rather than inferred later from message counts.
+  if (risk.level === 'low' && aiMessage?.id) {
+    await recordValueEvent({
+      clinicId: lead.clinic_id,
+      leadSessionId: lead.id,
+      messageId: aiMessage.id,
+      valueType: 'service_answer',
+    })
+  }
 
   // 7. Counters + audit. Metadata only — never the message text.
   await admin

@@ -45,6 +45,8 @@ export default function ChatThread({
   alreadyEscalated,
   showInvite,
   patientEmail,
+  weeklyStat,
+  articulationCard,
 }: {
   initialMessages: ChatMessage[]
   clinicFullName: string
@@ -55,9 +57,12 @@ export default function ChatThread({
   alreadyEscalated: boolean
   showInvite: boolean
   patientEmail: string | null
+  weeklyStat: string | null
+  articulationCard: string | null
 }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const [pending, startTransition] = useTransition()
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -101,6 +106,18 @@ export default function ChatThread({
         setInput(text)
       }
     })
+  }
+
+  async function copyCard() {
+    if (!articulationCard) return
+    try {
+      await navigator.clipboard.writeText(articulationCard)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard can be blocked. Silent failure is fine — the text is
+      // visible on screen and selectable.
+    }
   }
 
   return (
@@ -153,11 +170,23 @@ export default function ChatThread({
       </div>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5">
-        <p className="mb-5 text-center text-xs leading-relaxed text-[var(--fb-text-soft)]">
+        <p className="mb-2 text-center text-xs leading-relaxed text-[var(--fb-text-soft)]">
           {patientEmail
             ? 'Your record is with Fairbloom. Nightingale is an AI assistant, not a doctor.'
             : "This conversation is private and you don't need an account. Nightingale is an AI assistant, not a doctor."}
         </p>
+
+        {/* §2b: shown only when the live query returns a meaningful number.
+            Below the threshold this renders nothing at all — the truthful
+            alternative to a number that would not mean anything. */}
+        {weeklyStat && (
+          <p
+            className="mb-5 text-center text-xs"
+            style={{ color: 'var(--fb-primary-dk)' }}
+          >
+            {weeklyStat}
+          </p>
+        )}
 
         <ul className="space-y-3">
           {initialMessages.map((message) => {
@@ -194,6 +223,43 @@ export default function ChatThread({
             </li>
           )}
         </ul>
+
+        {/* §2a: unbranded on purpose. Someone can forward this to a partner
+            or a parent without disclosing that they contacted a fertility
+            clinic. The sharing is the value; attribution would be the cost. */}
+        {articulationCard && (
+          <div
+            className="mt-5 rounded-2xl border border-dashed px-4 py-3"
+            style={{
+              borderColor: 'var(--fb-accent)',
+              backgroundColor: 'rgba(244, 138, 113, 0.06)',
+            }}
+          >
+            <p
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: 'var(--fb-text-soft)' }}
+            >
+              Words you can borrow, if this is hard to explain.
+            </p>
+            <p
+              className="mt-2 text-sm leading-relaxed"
+              style={{ color: 'var(--fb-text)' }}
+            >
+              {articulationCard}
+            </p>
+            <button
+              type="button"
+              onClick={copyCard}
+              className="mt-2 text-xs underline"
+              style={{ color: 'var(--fb-text-soft)' }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+            <p className="mt-1 text-xs" style={{ color: 'var(--fb-text-soft)' }}>
+              Written as if from you. Nothing in it says where it came from.
+            </p>
+          </div>
+        )}
 
         <div ref={bottomRef} />
       </main>

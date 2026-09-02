@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getGuestSession, CLINIC_FULL_NAME } from '@/lib/guest'
+import { getWeeklyQuestionCount } from '@/lib/value-events'
 import ChatThread, { type ChatMessage } from './ChatThread'
 import { type MemoryItem } from './ProfilePanel'
 
@@ -83,6 +84,23 @@ export default async function ChatPage() {
     patientEmail = patientUser?.email ?? null
   }
 
+  /**
+   * §2b — the live statistic. Returns null when the count is below the
+   * meaningful threshold, and the UI then shows nothing at all. Never a
+   * fake number, and never a real number too small to mean anything.
+   */
+  const weeklyStat = await getWeeklyQuestionCount(lead.clinic_id)
+
+  // §2a — the most recent articulation card, if one has been generated.
+  const { data: cardRow } = await admin
+    .from('value_events')
+    .select('payload')
+    .eq('lead_session_id', lead.id)
+    .eq('value_type', 'articulation_card')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
   return (
     <ChatThread
       initialMessages={messages}
@@ -92,6 +110,8 @@ export default async function ChatPage() {
       canEscalate={Boolean(latest?.escalation_required) && !openCase}
       alreadyEscalated={Boolean(openCase)}
       patientEmail={patientEmail}
+      weeklyStat={weeklyStat?.text ?? null}
+      articulationCard={cardRow?.payload ?? null}
       /* Trigger per §4: real value delivered, not page landing. Gone once
          they have converted — there is nothing left to invite them to. */
       showInvite={
