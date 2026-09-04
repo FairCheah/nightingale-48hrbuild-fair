@@ -90,7 +90,25 @@ export async function sendGuestMessage(content: string) {
 
   const history = await loadRedactedHistory(admin, lead.id, redaction.redacted)
 
-  const llmRisk = await classifyRisk(history)
+  /**
+   * When the deterministic floor has already returned high, the classifier
+   * cannot change the outcome. combineRisk takes the maximum and nothing
+   * ranks above high, so ORDER[llm] <= ORDER[keyword] short-circuits for
+   * every possible answer it could give.
+   *
+   * Calling it anyway put a network round trip in front of the emergency
+   * script: 6s timeout, 1.5s backoff, 6s retry. During a provider outage a
+   * woman who typed "difficulty breathing" waited 13.5 seconds on a spinner
+   * before being told to call 999, for a verdict that was already decided
+   * locally in under a millisecond.
+   *
+   * Skipped rather than made non-blocking, because there is nothing for it
+   * to contribute. Every other path still runs both layers, and combineRisk
+   * still receives null the same way it does on a timeout.
+   */
+  const llmRisk =
+    keywordRisk.level === 'high' ? null : await classifyRisk(history)
+
   const risk = combineRisk(keywordRisk, llmRisk)
 
   // The risk verdict is stamped on the GUEST message, because it describes
