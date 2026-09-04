@@ -372,6 +372,10 @@ async function loadRedactedHistory(
   return turns
 }
 
+interface FactRow extends ExistingFact {
+  supersedes: string | null
+}
+
 /**
  * LIVING MEMORY PERSISTENCE — the provenance chain.
  *
@@ -394,22 +398,45 @@ async function updateMemory(
   sourceMessageId: string,
   history: LlmTurn[],
 ) {
-  // Current profile: the live rows only. Superseded rows stay in the table
-  // for provenance but must not be re-sent to the extractor as current.
-  const { data: existingRows } = await admin
+  /**
+   * Current profile: the LEAF rows, the ones nothing else supersedes.
+   *
+   * This previously selected `supersedes is null`, which returns the row at
+   * the START of each chain rather than the end. A correction writes a row
+   * whose supersedes is NOT null, so the correction was invisible here. A
+   * SECOND correction therefore matched the original row again and inserted
+   * a second child of the same parent — two rows both claiming to be current,
+   * with nothing to order them.
+   *
+   * Concretely: "I take Advil", then "actually I stopped it", then "actually
+   * I started again" left the profile showing Advil active AND Advil stopped
+   * side by side. A nurse reading that payload cannot tell which is true, in
+   * the one category where guessing wrong changes a prescription.
+   *
+   * This is the same leaf rule ProfilePanel uses to render, so what the
+   * extractor treats as current and what the patient sees cannot disagree.
+   */
+  const { data: allRows } = await admin
     .from('memory_items')
-    .select('id, kind, value, status')
+    .select('id, kind, value, status, supersedes')
     .eq('lead_session_id', leadSessionId)
-    .is('supersedes', null)
     .order('created_at', { ascending: true })
 
-  const existing = (existingRows ?? []) as ExistingFact[]
+  const rows = (allRows ?? []) as FactRow[]
+  const supersededIds = new Set(rows.map((row) => row.supersedes).filter(Boolean))
+  const existing = rows.filter((row) => !supersededIds.has(row.id)) as ExistingFact[]
 
   const facts = await extractFacts(history, existing)
   if (facts.length === 0) return { extracted: 0, superseded: 0 }
 
   const now = new Date().toISOString()
   let superseded = 0
+
+  /**
+   * Two facts in one batch must never supersede the same row: that is the
+   * same fork, created inside a single turn instead of across two.
+   */
+  const claimedTargets = new Set()
 
   for (const fact of facts) {
     // Find the row this fact replaces. Match on the value the model named,
@@ -424,6 +451,8 @@ async function updateMemory(
             row.kind === fact.kind &&
             row.value.toLowerCase() === fact.value.toLowerCase(),
         )
+
+    if (target && claimedTargets.has(target.id)) continue
 
     if (target) {
       // Skip a no-op: the model occasionally re-reports an unchanged fact.
@@ -445,6 +474,7 @@ async function updateMemory(
         })
         .eq('id', target.id)
 
+      claimedTargets.add(target.id)
       superseded += 1
     }
 
