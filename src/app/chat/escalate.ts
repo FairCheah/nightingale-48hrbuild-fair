@@ -208,11 +208,36 @@ export async function sendToClinic() {
     landing_timestamp: lead.landing_timestamp,
   }
 
+  /**
+   * If this session has ALREADY converted, the escalation belongs to the
+   * PatientSession as well as the LeadSession.
+   *
+   * This was missing, and it made half of escalations_read dead code. That
+   * policy lets a patient read her own escalation via
+   *   patient_sessions.id = escalations.patient_session_id
+   * and the column was never written here, so the branch could not match for
+   * anyone. A well-formed RLS policy that can never fire is scenario 20's
+   * complaint in miniature: isolation that reads as enforced and is not.
+   *
+   * The opposite order is already handled — continue/actions.ts relinks
+   * escalations at conversion for a guest who escalated first. The gap was a
+   * patient who converts and THEN escalates: conversion had already run, so
+   * nothing came back to fill it in.
+   */
+  const { data: patientSession } = await admin
+    .from('patient_sessions')
+    .select('id')
+    .eq('lead_session_id', lead.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
   const { data: escalation, error } = await admin
     .from('escalations')
     .insert({
       clinic_id: lead.clinic_id,
       lead_session_id: lead.id,
+      patient_session_id: patientSession?.id ?? null,
       triggering_message_id: trigger.id,
       // Snapshot of the text, so the record survives message purging.
       triggering_message_text: trigger.content_redacted ?? '[withheld]',
