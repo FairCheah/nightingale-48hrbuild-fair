@@ -59,6 +59,15 @@ export default async function StaffLayout({
           </div>
 
           <nav className="flex flex-wrap items-center gap-4 text-xs">
+            {['nurse', 'clinician'].includes(role) && (
+              <a
+                href="/staff/triage"
+                className="underline"
+                style={{ color: 'var(--fb-text)' }}
+              >
+                Triage
+              </a>
+            )}
             <a
               href="/staff/leads"
               className="underline"
