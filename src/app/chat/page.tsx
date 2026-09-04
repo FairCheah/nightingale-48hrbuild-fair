@@ -24,7 +24,11 @@ export default async function ChatPage() {
   const lead = await getGuestSession()
 
   if (!lead) {
-    redirect('/link-invalid?reason=notfound')
+    // Not 'notfound': there is no token here to be missing. This is someone
+    // with no guest cookie - a first-time visitor who opened /chat directly,
+    // or a browser that dropped the cookie. Telling her a conversation was
+    // deleted when she never started one is its own small lie.
+    redirect('/link-invalid?reason=nosession')
   }
 
   const admin = createAdminClient()
