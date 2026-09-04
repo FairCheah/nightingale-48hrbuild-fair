@@ -75,10 +75,55 @@ const HANDLE_PATTERN = /@[A-Za-z0-9._]{2,30}\b/g
  * never to echo identifiers, and staff-visible guest content is gated
  * behind consent regardless.
  */
+/**
+ * NO /i FLAG. This is the whole point.
+ *
+ * These patterns previously carried /gi. The `i` made them case-INSENSITIVE,
+ * which meant [A-Z][a-z]+ matched any lowercase word — the capitalisation
+ * requirement, the only thing distinguishing a name from an ordinary word,
+ * did nothing at all.
+ *
+ * Observed in production data:
+ *
+ *   "i am heavily bleeding and i am feeling faint"
+ *      became
+ *   "i am [NAME_1] i am [NAME_2]"
+ *
+ * The capture takes up to three capitalised words, so "heavily bleeding and"
+ * was swallowed as one name. The redactor deleted the word BLEEDING from a
+ * message about bleeding, and FAINT from a report of feeling faint. Every
+ * downstream consumer — the LLM classifier, the triage summariser, memory
+ * extraction, and the nurse reading the payload — saw the mangled version.
+ *
+ * The 999 script still fired only because assessKeywordRisk runs on the RAW
+ * text before redaction (chat/actions.ts). That ordering is what stopped this
+ * from being an emergency the system missed. Scenario 10 asks which clinical
+ * phrase redaction would mangle: this one, and it was already mangling it.
+ *
+ * Trigger casings are enumerated instead, so "I am" and "i am" both match
+ * while the captured name must be genuinely capitalised.
+ */
 const NAME_PATTERNS: RegExp[] = [
-  /(?:my name is|my name's|i am|i'm|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/gi,
-  /\b(?:mr|mrs|ms|miss|dr|puan|encik|cik)\.?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/gi,
+  /(?:[Mm]y name is|[Mm]y name's|[Ii] am|[Ii]'m|[Tt]his is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/g,
+  /\b(?:[Mm]r|[Mm]rs|[Mm]s|[Mm]iss|[Dd]r|[Pp]uan|[Ee]ncik|[Cc]ik)\.?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/g,
 ]
+
+/**
+ * Second layer, for a patient who types in title case or shouts.
+ * "I am Bleeding Heavily" is correctly capitalised and still not a name.
+ *
+ * Deliberately small and clinical. This is a stoplist, not a dictionary: an
+ * unfamiliar word is still treated as a name, so an unusual real name is
+ * redacted rather than leaked. It fails toward privacy.
+ */
+const NOT_A_NAME = new Set([
+  'Bleeding', 'Heavily', 'Feeling', 'Having', 'Pregnant', 'Worried',
+  'Scared', 'Spotting', 'Cramping', 'Trying', 'Still', 'Not', 'So',
+  'Very', 'Really', 'Just', 'Also', 'Sorry', 'Fine', 'Okay', 'Ok',
+  'Unsure', 'Confused', 'Tired', 'Late', 'Sure', 'Afraid', 'Struggling',
+  'Experiencing', 'Concerned', 'Nauseous', 'Dizzy', 'Faint', 'Anxious',
+  'Depressed', 'Bloated', 'Itchy', 'Sore', 'Weak', 'Numb', 'Breathless',
+])
 
 interface Match {
   kind: PhiKind
@@ -94,6 +139,18 @@ function collect(text: string, pattern: RegExp, kind: PhiKind): Match[] {
   while ((m = re.exec(text)) !== null) {
     // Capture group 1 when present (name patterns), else the whole match.
     const value = m[1] ?? m[0]
+
+    // A capture made entirely of clinical or filler words is not a name.
+    // Only applies to the NAME patterns, which are the only ones with a
+    // capture group.
+    if (
+      kind === 'NAME' &&
+      m[1] &&
+      m[1].split(/\s+/).every((word) => NOT_A_NAME.has(word))
+    ) {
+      if (m.index === re.lastIndex) re.lastIndex++
+      continue
+    }
     const start = m[1] ? m.index + m[0].indexOf(m[1]) : m.index
     found.push({ kind, start, end: start + value.length })
     if (m.index === re.lastIndex) re.lastIndex++
