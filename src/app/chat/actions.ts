@@ -118,6 +118,10 @@ export async function sendGuestMessage(content: string) {
     .update({
       risk_level: risk.level,
       risk_reason: risk.reason,
+      // Stored rather than re-derived. The UI used to guess scope by
+      // string-searching risk_reason, which was wrong for every high-risk
+      // out-of-scope match.
+      scope: risk.scope,
       confidence: risk.confidence,
       risk_provenance: risk.assessedAt,
       escalation_required: risk.escalationRequired,
@@ -155,13 +159,35 @@ export async function sendGuestMessage(content: string) {
         'I can pass it to a nurse at Fairbloom. If it is something else, a GP or an ' +
         'emergency department is the better place. Which sounds closer?'
     } else {
+      /**
+       * In scope and medium risk: gather before offering the handoff.
+       *
+       * This branch used to return a fixed sentence and go straight to the
+       * button, so the nurse received one line — "I found a lump" — and her
+       * eleven minutes started with a blank. Two or three plain questions
+       * first produce a payload she can act on, and someone who has answered
+       * them is more invested than someone shown a button.
+       *
+       * The fixed text remains as the fallback: if the model is unavailable
+       * we still offer the nurse, we just cannot ask anything first.
+       */
+      const gathered = await generateReply(history, {
+        referralTopic: lead.referral_topic,
+        gatherIntake: true,
+      })
+
       reply =
+        gathered?.text ??
         honest +
-        'This is something Fairbloom can help with. I would rather pass it to a nurse ' +
-        'here than give you an answer that sounds confident and turns out to be wrong. ' +
-        'Would you like me to?'
+          'This is something Fairbloom can help with. I would rather pass it to a nurse ' +
+          'here than give you an answer that sounds confident and turns out to be wrong. ' +
+          'Would you like me to?'
+
+      grounding = gathered?.offered ?? []
     }
   } else {
+    // Low risk: an ordinary answer. Gathering happens in the medium branch
+    // above, where there is actually something for a nurse to receive.
     const generated = await generateReply(history, {
       referralTopic: lead.referral_topic,
     })
@@ -194,6 +220,7 @@ export async function sendGuestMessage(content: string) {
       redaction_applied: false,
       risk_level: risk.level,
       risk_reason: risk.reason,
+      scope: risk.scope,
       // On a scripted emergency response we are highly confident, because we
       // wrote it. On the low-risk placeholder we are not.
       confidence: risk.level === 'low' ? 'low' : 'high',

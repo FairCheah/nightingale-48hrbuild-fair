@@ -36,7 +36,7 @@ export default async function ChatPage() {
   const { data } = await admin
     .from('messages')
     .select(
-      'id, sender, content, created_at, risk_level, escalation_required, risk_reason',
+      'id, sender, content, created_at, risk_level, escalation_required, risk_reason, scope',
     )
     .eq('lead_session_id', lead.id)
     .order('created_at', { ascending: true })
@@ -151,13 +151,28 @@ export default async function ChatPage() {
         (messages.filter((m) => m.sender === 'ai').length >= 2 ||
           Boolean(openCase))
       }
+      /**
+       * Read the stored value, do not re-derive it.
+       *
+       * This used to string-search risk_reason for 'ambiguous_cardiac', a
+       * label that only appears on the MEDIUM cardiac rule. A HIGH cardiac
+       * match produces "Emergency phrase matched: cardiac", which does not
+       * contain it — so the check fell through to in_scope and offered a
+       * Fairbloom nurse for crushing chest pain, the exact thing the scope
+       * system exists to prevent.
+       *
+       * risk.ts computed the correct value and it was discarded one line
+       * later. Migration 23 stores it. The fallback below covers rows
+       * written before that; new rows never reach it.
+       */
       activeScope={
-        latest?.risk_reason?.includes('ambiguous_cardiac') ||
+        latest?.scope ??
+        (latest?.risk_reason?.includes('ambiguous_cardiac') ||
         latest?.risk_reason?.includes('ambiguous_neuro')
           ? 'out_of_scope'
           : latest?.risk_reason?.includes('severe_pain')
             ? 'unclear'
-            : 'in_scope'
+            : 'in_scope')
       }
     />
   )

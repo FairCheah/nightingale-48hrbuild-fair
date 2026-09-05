@@ -166,7 +166,16 @@ Names and identifiers appear as placeholders like [NAME_1]. Never echo a placeho
  */
 export async function generateReply(
   redactedHistory: LlmTurn[],
-  context?: { referralTopic?: string | null },
+  context?: {
+    referralTopic?: string | null
+    /**
+     * Set when the keyword floor or the classifier put this turn at medium
+     * risk AND it is inside what the clinic treats. It switches the reply
+     * from answering to gathering, so the nurse receives a usable picture
+     * rather than one sentence.
+     */
+    gatherIntake?: boolean
+  },
 ): Promise<{ text: string; offered: KnowledgeEntry[] } | null> {
   // Retrieve against the person's own words, not the whole transcript.
   const lastUserTurn =
@@ -179,6 +188,42 @@ export async function generateReply(
   let system = context?.referralTopic
     ? `${REPLY_SYSTEM}\n\nCONTEXT: the ${CLINIC} care team noted this person asked about "${context.referralTopic}". Do not make them repeat it.`
     : REPLY_SYSTEM
+  /**
+   * INTAKE BEFORE HANDOFF.
+   *
+   * Previously a medium-risk turn went straight to "Send to Nurse", so the
+   * escalation carried one sentence — "I found a lump" — and Sister Aminah's
+   * eleven minutes started with a blank. Asking two or three plain questions
+   * first produces a payload she can act on, and someone who has answered
+   * them is far more invested than someone shown a button.
+   *
+   * NEVER on high risk. A woman typing crushing chest pain does not get a
+   * questionnaire; she gets the emergency script, immediately. That branch
+   * never reaches this function — actions.ts uses the fixed script instead.
+   *
+   * NEVER out of scope. Asking a stranger follow-up questions about cardiac
+   * symptoms implies this clinic will handle them. It will not.
+   */
+  if (context?.gatherIntake) {
+    system += `
+
+GATHERING BEFORE THE HANDOFF
+This person has described something a nurse should see, and it is within what ${CLINIC} treats.
+
+Reply briefly, then ask TWO or THREE short questions whose answers would genuinely change how a nurse reads this. Number them.
+
+Ask only about things she can observe and report herself:
+- when it started, and whether it has changed
+- how often, how long, how heavy
+- anything that makes it better or worse
+- whether she has been checked for this before
+
+Do NOT ask anything that narrows toward a diagnosis, and do NOT ask for names, IC numbers, addresses or dates of birth. She has not signed up for anything.
+
+Say plainly why you are asking: her answers go to the nurse so the nurse does not have to start from nothing. Then tell her she can skip this and send it as it is, or just leave a contact and let the clinic come back to her. Never make the questions feel like a condition of being helped.
+
+Do not offer to send anything yourself in this reply. The person chooses when to send.`
+  }
 
   if (offered.length > 0) {
     const material = offered

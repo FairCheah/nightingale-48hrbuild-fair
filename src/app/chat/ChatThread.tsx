@@ -14,6 +14,7 @@ export interface ChatMessage {
   risk_level: string | null
   risk_reason: string | null
   escalation_required: boolean
+    scope?: string | null
 }
 
 /**
