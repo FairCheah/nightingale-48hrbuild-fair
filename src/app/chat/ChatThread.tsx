@@ -66,6 +66,7 @@ export default function ChatThread({
   patientEmail,
   weeklyStat,
   articulationCard,
+  articulationCardMessageId,
   openingChips,
   citations,
 }: {
@@ -81,6 +82,7 @@ export default function ChatThread({
   patientEmail: string | null
   weeklyStat: string | null
   articulationCard: string | null
+  articulationCardMessageId: string | null
   openingChips: string[]
   citations: Citation[]
 }) {
@@ -98,6 +100,41 @@ export default function ChatThread({
   const [optimistic, setOptimistic] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
     const [panelOpen, setPanelOpen] = useState(false)
+  /**
+   * Inline exactly once, then it lives in the drawer.
+   *
+   * Moving it straight to the drawer solved the blocking problem and created
+   * a worse one: something generated for her, that she has no reason to look
+   * for, might as well not exist. It has to be shown before it can be filed.
+   *
+   * Anchored to the message it was generated with, not a message count. The
+   * first attempt checked the last two messages for a guest turn, which is
+   * always true — every guest turn produces an AI reply — so the inline
+   * branch could never fire.
+   */
+    /**
+   * The drawer solved the blocking problem and created a quieter one: a
+   * record about her now changes in a place she is not looking. A count that
+   * silently increments is not a notification.
+   *
+   * So the button pulses when the profile grows, and stops the moment she
+   * opens it. Seen state is per-render rather than persisted: this is a
+   * nudge, not a badge to be chased, and it should never still be pulsing
+   * three days later about something she has already read.
+   */
+  const [seenCount, setSeenCount] = useState(memoryItems.length)
+  const hasNewNotes = memoryItems.length > seenCount
+
+  useEffect(() => {
+    if (panelOpen) setSeenCount(memoryItems.length)
+  }, [panelOpen, memoryItems.length])
+
+  const lastMessage = initialMessages[initialMessages.length - 1]
+
+  const showCardInline =
+    Boolean(articulationCard) &&
+    Boolean(articulationCardMessageId) &&
+    lastMessage?.id === articulationCardMessageId
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -192,13 +229,26 @@ export default function ChatThread({
           >
             N
           </div>
-                    <button
+          <button
             type="button"
             onClick={() => setPanelOpen(true)}
-            className="order-last shrink-0 rounded-full border px-3 py-1.5 text-xs"
+            className={`order-last shrink-0 rounded-full border px-3 py-1.5 text-xs transition ${
+              hasNewNotes ? 'fb-nudge' : ''
+            }`}
+            /**
+             * Quiet at rest, pink and pulsing when something new is in there.
+             * A button that is always highlighted stops meaning anything.
+             */
             style={{
-              borderColor: 'var(--fb-primary)',
-              color: 'var(--fb-primary-dk)',
+              borderColor: hasNewNotes
+                ? 'var(--fb-primary)'
+                : 'var(--fb-border)',
+              backgroundColor: hasNewNotes
+                ? 'rgba(231, 41, 92, 0.10)'
+                : 'transparent',
+              color: hasNewNotes
+                ? 'var(--fb-primary-dk)'
+                : 'var(--fb-text-soft)',
             }}
           >
             Notes{memoryItems.length > 0 ? ` · ${memoryItems.length}` : ''}
@@ -370,6 +420,43 @@ export default function ChatThread({
                 {chip}
               </button>
             ))}
+          </div>
+        )}
+
+        {showCardInline && articulationCard && (
+          <div
+            className="mt-5 rounded-2xl border border-dashed px-4 py-3"
+            style={{
+              borderColor: 'var(--fb-accent)',
+              backgroundColor: 'rgba(252, 169, 162, 0.10)',
+            }}
+          >
+            <p
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: 'var(--fb-text-soft)' }}
+            >
+              Words you can borrow, if this is hard to explain
+            </p>
+            <p
+              className="mt-2 text-sm leading-relaxed"
+              style={{ color: 'var(--fb-text)' }}
+            >
+              {articulationCard}
+            </p>
+            <button
+              type="button"
+              onClick={copyCard}
+              className="mt-2 text-xs underline"
+              style={{ color: 'var(--fb-text-soft)' }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+            <p
+              className="mt-1 text-xs"
+              style={{ color: 'var(--fb-text-soft)' }}
+            >
+              Written as if from you. It stays in Notes if you want it later.
+            </p>
           </div>
         )}
 

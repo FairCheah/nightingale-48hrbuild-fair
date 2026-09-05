@@ -136,7 +136,7 @@ export default async function ChatPage() {
   // §2a — the most recent articulation card, if one has been generated.
   const { data: cardRow } = await admin
     .from('value_events')
-    .select('payload')
+    .select('payload, message_id')
     .eq('lead_session_id', lead.id)
     .eq('value_type', 'articulation_card')
     .order('created_at', { ascending: false })
@@ -172,6 +172,12 @@ export default async function ChatPage() {
       patientEmail={patientEmail}
       weeklyStat={weeklyStat?.text ?? null}
       articulationCard={cardRow?.payload ?? null}
+      /**
+       * The AI turn the card was generated alongside. It renders inline only
+       * while that turn is still the newest thing in the thread, and moves to
+       * the drawer once she has said something since.
+       */
+      articulationCardMessageId={cardRow?.message_id ?? null}
       openingChips={(chipRule?.opening_chips ?? []) as string[]}
       citations={(citationRows ?? []) as Citation[]}
       /* Trigger per §4: real value delivered, not page landing. Gone once

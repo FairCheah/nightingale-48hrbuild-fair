@@ -64,3 +64,14 @@ body {
      rather than urgent. */
   --fb-safe: #92ac7e;
 }
+
+/* Notes button when the profile has grown. Scale rather than opacity: a
+   fading button reads as disabled, and this needs to read as new. */
+@keyframes fb-nudge {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+
+.fb-nudge {
+  animation: fb-nudge 1s ease-in-out infinite;
+}
