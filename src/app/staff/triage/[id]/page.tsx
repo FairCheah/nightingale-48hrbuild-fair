@@ -126,6 +126,21 @@ export default async function EscalationDetail({
     }
   }
 
+  
+  /**
+   * What she volunteered as a guest, and how she asked to be reached.
+   *
+   * Read separately from the patient record above: a guest who never signed
+   * up has no app_users row, and her contact details live on the lead session.
+   * Before this, a nurse was told "she has not given a contact route" even
+   * when she had just typed her number in.
+   */
+  const { data: leadContact } = await supabase
+    .from('lead_sessions')
+    .select('volunteered_email, volunteered_phone, contact_preference')
+    .eq('id', esc.lead_session_id)
+    .maybeSingle()
+
   const snap = (esc.profile_snapshot ?? {}) as Snapshot
   const acq = (esc.acquisition_context ?? {}) as Acquisition
   const current = snap.current ?? []
@@ -377,7 +392,7 @@ export default async function EscalationDetail({
         </div>
       </section>
 
-      {/* 5. Reaching her. Honest when there is no route. */}
+         {/* 5. Reaching her, and how she asked to be reached. */}
       <section className="mt-4">
         <h2
           className="text-xs font-semibold uppercase"
@@ -393,35 +408,69 @@ export default async function EscalationDetail({
             color: 'var(--fb-text)',
           }}
         >
-          {contact?.email || contact?.phone ? (
-            <div className="flex flex-wrap gap-3">
-              {contact.email && (
-                <a
-                  className="underline"
-                  style={{ color: 'var(--fb-primary-dk)' }}
-                  href={`mailto:${contact.email}`}
-                >
-                  Email {contact.email}
-                </a>
-              )}
-              {contact.phone && (
-                <a
-                  className="underline"
-                  style={{ color: 'var(--fb-primary-dk)' }}
-                  href={`https://wa.me/${contact.phone.replace(/[^0-9]/g, '')}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  WhatsApp {contact.phone}
-                </a>
-              )}
-            </div>
-          ) : (
-            <p style={{ color: 'var(--fb-text-soft)' }}>
-              She has not given a contact route. Replying below reaches her in
-              the conversation itself, which is the only channel she agreed to.
+          {/*
+            Her stated preference outranks whatever we happen to hold.
+            "In conversation" is a choice, not an absence: she asked not to be
+            chased, and a nurse who emails her anyway has overridden her.
+          */}
+          {leadContact?.contact_preference === 'in_conversation' && (
+            <p className="mb-2" style={{ color: 'var(--fb-primary-dk)' }}>
+              She asked to be answered here, not contacted directly. Your reply
+              below is what she is expecting.
             </p>
           )}
+
+          {leadContact?.contact_preference === 'whatsapp' && (
+            <p className="mb-2" style={{ color: 'var(--fb-primary-dk)' }}>
+              She asked to be reached by WhatsApp.
+            </p>
+          )}
+
+          {leadContact?.contact_preference === 'email' && (
+            <p className="mb-2" style={{ color: 'var(--fb-primary-dk)' }}>
+              She asked to be reached by email.
+            </p>
+          )}
+
+          {(() => {
+            const email = contact?.email ?? leadContact?.volunteered_email
+            const phone = contact?.phone ?? leadContact?.volunteered_phone
+
+            if (!email && !phone) {
+              return (
+                <p style={{ color: 'var(--fb-text-soft)' }}>
+                  She has not given a contact route. Replying below reaches her
+                  in the conversation itself, which is the only channel she
+                  agreed to.
+                </p>
+              )
+            }
+
+            return (
+              <div className="flex flex-wrap gap-3">
+                {email && (
+                  <a
+                    className="underline"
+                    style={{ color: 'var(--fb-primary-dk)' }}
+                    href={`mailto:${email}`}
+                  >
+                    Email {email}
+                  </a>
+                )}
+                {phone && (
+                  <a
+                    className="underline"
+                    style={{ color: 'var(--fb-primary-dk)' }}
+                    href={`https://wa.me/${phone.replace(/[^0-9]/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    WhatsApp {phone}
+                  </a>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </section>
 

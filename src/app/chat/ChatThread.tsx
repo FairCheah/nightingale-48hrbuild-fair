@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { sendGuestMessage } from './actions'
-import ProfilePanel, { type MemoryItem } from './ProfilePanel'
+import { type MemoryItem } from './ProfilePanel'
+import SidePanel from './SidePanel'
 import { sendToClinic } from './escalate'
 import ContactPreference from './ContactPreference'
 
@@ -96,6 +97,7 @@ export default function ChatThread({
    */
   const [optimistic, setOptimistic] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+    const [panelOpen, setPanelOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -190,6 +192,17 @@ export default function ChatThread({
           >
             N
           </div>
+                    <button
+            type="button"
+            onClick={() => setPanelOpen(true)}
+            className="order-last shrink-0 rounded-full border px-3 py-1.5 text-xs"
+            style={{
+              borderColor: 'var(--fb-primary)',
+              color: 'var(--fb-primary-dk)',
+            }}
+          >
+            Notes{memoryItems.length > 0 ? ` · ${memoryItems.length}` : ''}
+          </button>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-[var(--fb-text)]">
               Nightingale AI
@@ -220,12 +233,6 @@ export default function ChatThread({
           )}
         </div>
       </header>
-
-      {/* Sits directly under the header so it is reachable on a phone without
-          a sidebar, which would not fit. Collapsed until the person opens it. */}
-      <div className="pt-3">
-        <ProfilePanel items={memoryItems} />
-      </div>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5">
         <p className="mb-2 text-center text-xs leading-relaxed text-[var(--fb-text-soft)]">
@@ -366,46 +373,8 @@ export default function ChatThread({
           </div>
         )}
 
-        {/* §2a: unbranded on purpose. Someone can forward this to a partner
-            or a parent without disclosing that they contacted a fertility
-            clinic. The sharing is the value; attribution would be the cost. */}
-        {articulationCard && (
-          <div
-            className="mt-5 rounded-2xl border border-dashed px-4 py-3"
-            style={{
-              borderColor: 'var(--fb-accent)',
-              backgroundColor: 'rgba(244, 138, 113, 0.06)',
-            }}
-          >
-            <p
-              className="text-xs font-semibold uppercase tracking-wide"
-              style={{ color: 'var(--fb-text-soft)' }}
-            >
-              Words you can borrow, if this is hard to explain
-            </p>
-            <p
-              className="mt-2 text-sm leading-relaxed"
-              style={{ color: 'var(--fb-text)' }}
-            >
-              {articulationCard}
-            </p>
-            <button
-              type="button"
-              onClick={copyCard}
-              className="mt-2 text-xs underline"
-              style={{ color: 'var(--fb-text-soft)' }}
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-            <p className="mt-1 text-xs" style={{ color: 'var(--fb-text-soft)' }}>
-              Written as if from you. Nothing in it says where it came from.
-            </p>
-          </div>
-        )}
-
         <div ref={bottomRef} />
       </main>
-
       <footer className="sticky bottom-0 border-t border-[var(--fb-border)] bg-[var(--fb-surface)]">
         {/* Risk banner sits ABOVE the composer so it cannot be scrolled past.
             Input stays enabled deliberately: a frightened person who cannot
@@ -574,6 +543,15 @@ export default function ChatThread({
           </p>
         </div>
       </footer>
+
+      <SidePanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        items={memoryItems}
+        articulationCard={articulationCard}
+        onCopyCard={copyCard}
+        copied={copied}
+      />
     </div>
   )
 }

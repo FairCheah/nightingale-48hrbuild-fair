@@ -368,7 +368,16 @@ export async function sendGuestMessage(content: string) {
   }
 
   // 7. Counters + audit. Metadata only — never the message text.
-  await admin
+  /**
+   * The result is checked. It was not, and the first test of this form ran
+   * against a database where migration 24 had not been applied — so the
+   * update failed on a missing column, the action returned ok, and the UI
+   * told her "Noted" for a write that never happened.
+   *
+   * Same shape as the purge that reported success while deleting nothing.
+   * An unchecked write is a silent lie waiting for the first schema drift.
+   */
+  const { error: updateError } = await admin
     .from('lead_sessions')
     .update({
       last_active_at: now.toISOString(),
@@ -376,6 +385,9 @@ export async function sendGuestMessage(content: string) {
       request_count: count,
     })
     .eq('id', lead.id)
+      if (updateError) {
+    return { error: 'Could not save that just now. Please try again.' }
+  }
 
   await admin.from('audit_logs').insert({
     actor_id: null,
