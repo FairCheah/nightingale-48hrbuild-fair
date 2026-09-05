@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { CLOSURE_REASONS } from './closure-reasons'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
  * Clinical actions on an escalation.
@@ -87,6 +88,43 @@ export async function replyToEscalation(
 
   if (!esc) return { ok: false, error: 'That escalation is not available.' }
 
+    /**
+   * The reply has to reach her, not just be recorded.
+   *
+   * clinician_responses was written by this action and read only by staff
+   * pages, so a nurse could type an answer, see "Sent", and the woman waiting
+   * would never see it. The confirmation she had already been shown - "a
+   * nurse will review this within 12 to 18 hours" - was false the moment it
+   * was written.
+   *
+   * So the reply is BOTH: a row in clinician_responses for the clinical
+   * record, and a message in her thread, which is the only channel she
+   * agreed to. Written first, because a reply she can read matters more than
+   * a reply we have filed.
+   */
+  const { data: leadSession } = await supabase
+    .from('escalations')
+    .select('lead_session_id')
+    .eq('id', id)
+    .single()
+
+  if (leadSession?.lead_session_id) {
+    const admin = createAdminClient()
+
+    await admin.from('messages').insert({
+      lead_session_id: leadSession.lead_session_id,
+      sender: 'ai',
+      content:
+        `${profile.display_name ?? 'Fairbloom'} — ${profile.role} at Fairbloom\n\n` +
+        trimmed,
+      redaction_applied: false,
+      risk_level: 'low',
+      risk_reason: 'clinician reply',
+      confidence: 'high',
+      risk_provenance: new Date().toISOString(),
+      escalation_required: false,
+    })
+  }
   const { error: insertError } = await supabase
     .from('clinician_responses')
     .insert({

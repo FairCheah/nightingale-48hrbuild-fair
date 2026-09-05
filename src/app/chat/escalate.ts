@@ -65,7 +65,7 @@ export async function sendToClinic() {
   const admin = createAdminClient()
 
   /**
-   * The triggering message: the most recent guest turn the risk gate flagged.
+   * The triggering message: the FIRST guest turn the risk gate flagged.
    *
    * If nothing was flagged, fall back to her most recent message. Brief §8
    * escalates on Med/High risk OR when the patient wants clarity or a human,
@@ -82,7 +82,20 @@ export async function sendToClinic() {
     .eq('lead_session_id', lead.id)
     .eq('sender', 'guest')
     .eq('escalation_required', true)
-    .order('created_at', { ascending: false })
+    /**
+     * OLDEST flagged message, not newest.
+     *
+     * The intake questions mean she often answers two or three follow-ups
+     * before pressing send, and those answers are flagged too. Taking the
+     * newest put "yes, i have nausea and breast pain" at the top of the
+     * queue - her answer to a question, with the question invisible, and
+     * her actual concern nowhere on the card.
+     *
+     * The first flagged message is the one that brought her here. The
+     * answers are in the summary and the profile, which is where a nurse
+     * expects detail rather than a headline.
+     */
+    .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
 
@@ -292,17 +305,21 @@ export async function sendToClinic() {
     .eq('id', lead.id)
 
   /**
-   * The confirmation is honest about the one thing that matters to a guest:
-   * we have their words but no way to reach them. That is the moment to offer
-   * conversion — after the safety action, not before it.
+   * The confirmation used to tell her the clinic had no way to reply. That
+   * was true until the nurse's reply started landing in her thread, and then
+   * it was a lie the product told every escalating guest.
+   *
+   * It now says where the reply arrives, that she needs no account for it,
+   * and that leaving a contact is optional. The offer comes after the safety
+   * action, never as a toll gate in front of it.
    */
   const confirmation =
     'Sent. A nurse at Fairbloom now has this, and will review it within 12 to ' +
     '18 hours.\n\n' +
-    'One thing you should know: because you have not made an account, they can ' +
-    'read what you wrote but have no way to reply to you. If you would like ' +
-    'them to get back to you, you can add a contact — it takes a moment and ' +
-    'nothing you have already said needs repeating.\n\n' +
+    'Their reply will appear here, in this conversation. You do not need an ' +
+    'account for that, and you do not need to tell them who you are.\n\n' +
+    'If you would rather they reached you directly, you can leave an email or ' +
+    'a number below — but that is entirely up to you.\n\n' +
     'If anything changes or gets worse before then, please call 999 or go to a ' +
     'hospital emergency department. I am still here in the meantime.'
 

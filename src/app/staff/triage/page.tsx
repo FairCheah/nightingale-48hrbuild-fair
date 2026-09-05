@@ -88,8 +88,17 @@ export default async function TriagePage() {
   const now = Date.now()
   const all = rows ?? []
 
-  const open = all.filter((r) => ['pending', 'in_review'].includes(r.status))
-  const done = all.filter((r) => !['pending', 'in_review'].includes(r.status))
+  /**
+   * 'responded' is not 'finished'. A reply usually starts a conversation
+   * rather than ending one, and dropping the case into a collapsed section
+   * the moment a nurse answers means nobody is watching when she replies.
+   *
+   * Only a clinician closing the case takes it out of the queue. That is
+   * also why closing is clinician-only: deciding a concern is over is a
+   * clinical judgement, not an inbox action.
+   */
+  const open = all.filter((r) => r.status !== 'closed')
+  const done = all.filter((r) => r.status === 'closed')
 
   const breached = open.filter(
     (r) => r.response_due_at && new Date(r.response_due_at).getTime() < now,
@@ -105,7 +114,7 @@ export default async function TriagePage() {
           Triage queue
         </h1>
         <p className="mt-1 text-xs" style={{ color: 'var(--fb-text-soft)' }}>
-          {open.length} awaiting a reply
+          {open.length} open
           {breached > 0 ? (
             <span style={{ color: 'var(--fb-danger)' }}>
               {' '}
@@ -228,7 +237,7 @@ export default async function TriagePage() {
             className="cursor-pointer text-xs"
             style={{ color: 'var(--fb-text-soft)' }}
           >
-            {done.length} answered or closed
+            {done.length} closed
           </summary>
           <ul className="mt-2 space-y-1">
             {done.map((row) => (
