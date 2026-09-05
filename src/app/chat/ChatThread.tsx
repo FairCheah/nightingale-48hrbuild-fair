@@ -14,7 +14,6 @@ export interface ChatMessage {
   risk_level: string | null
   risk_reason: string | null
   escalation_required: boolean
-    scope?: string | null
 }
 
 /**
@@ -523,10 +522,26 @@ export default function ChatThread({
               type="button"
               onClick={submit}
               disabled={pending || !input.trim()}
-              className="h-11 shrink-0 rounded-2xl px-5 text-sm font-medium text-white transition disabled:opacity-40"
-              style={{ backgroundColor: 'var(--fb-primary)' }}
+              className="h-11 shrink-0 rounded-2xl px-5 text-sm font-medium transition"
+              /**
+               * Three states, three appearances. opacity-40 on one colour
+               * made "nothing typed yet" and "still thinking" identical, and
+               * neither said which it was.
+               */
+              style={{
+                backgroundColor: pending
+                  ? 'var(--fb-muted)'
+                  : input.trim()
+                    ? 'var(--fb-primary)'
+                    : 'var(--fb-border)',
+                color:
+                  pending || !input.trim()
+                    ? 'var(--fb-text-soft)'
+                    : '#ffffff',
+                cursor: pending || !input.trim() ? 'default' : 'pointer',
+              }}
             >
-              Send
+              {pending ? 'Thinking…' : 'Send'}
             </button>
           </div>
 

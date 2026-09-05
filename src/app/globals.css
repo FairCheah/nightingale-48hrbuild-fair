@@ -33,16 +33,34 @@ body {
    ============================================================ */
 
 :root {
-  --fb-bg: #faf6f5;
+  --fb-bg: #fdf7f6;
   --fb-surface: #ffffff;
-  --fb-muted: #ffdede;
-  --fb-lilac: #e8bae3;
-  --fb-primary: #7c8b7f;
-  --fb-primary-dk: #5f6e63;
-  --fb-accent: #f48a71;
+
+  /* Swatch 4 — pale pink. Patient message bubbles, soft fills. */
+  --fb-muted: #fcdbd9;
+
+  /* Avatar plate behind the flower. Was lilac, which was in no palette. */
+  --fb-lilac: #fca9a2;
+
+  /* Swatch 1 — deep pink. Primary action only: Send, and the focus ring.
+     Deliberately NOT used for anything that means danger. */
+  --fb-primary: #e7295c;
+  --fb-primary-dk: #c01c4a;
+
+  /* Swatch 3 — coral. The articulation card border, secondary accents. */
+  --fb-accent: #fca9a2;
+
   --fb-text: #3e3244;
-  --fb-text-soft: #7b6e80;
-  --fb-border: #eadfe4;
-  --fb-danger: #b4544a;
-  --fb-safe: #6f8f84;
+  --fb-text-soft: #8a7a80;
+  --fb-border: #f2e2e1;
+
+  /* Emergency only. Deepened from #b4544a so it stays clearly darker and
+     browner than the new pink — the 999 banner has to read as a different
+     KIND of colour, not a stronger version of the button colour. */
+  --fb-danger: #9e2b1e;
+
+  /* Swatch 5 — sage. "Send this to a nurse", and every safe/positive state.
+     The one green thing on a warm screen, which is why it reads as calm
+     rather than urgent. */
+  --fb-safe: #92ac7e;
 }
