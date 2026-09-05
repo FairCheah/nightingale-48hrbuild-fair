@@ -10,6 +10,7 @@ import type { LlmTurn } from '@/lib/llm'
 import { extractFacts, type ExistingFact } from '@/lib/memory'
 import { generateArticulationCard, recordValueEvent } from '@/lib/value-events'
 import type { KnowledgeEntry } from '@/lib/knowledge'
+import { screenPatientReply } from '@/lib/output-gate'
 
 /**
  * SEND MESSAGE — the single write path for guest conversation.
@@ -176,8 +177,28 @@ export async function sendGuestMessage(content: string) {
         gatherIntake: true,
       })
 
+      /**
+       * The intake questions are patient-facing generated text too, so they
+       * go through the same gate. A model asked to ask questions can still
+       * slip a diagnosis into the sentence before them.
+       */
+      const gatheredScreened = gathered
+        ? screenPatientReply(gathered.text)
+        : null
+
+      if (gatheredScreened?.blocked) {
+        console.warn(
+          JSON.stringify({
+            event: 'output_gate_blocked',
+            lead_session_id: lead.id,
+            reasons: gatheredScreened.reasons,
+            at: new Date().toISOString(),
+          }),
+        )
+      }
+
       reply =
-        gathered?.text ??
+        gatheredScreened?.text ??
         honest +
           'This is something Fairbloom can help with. I would rather pass it to a nurse ' +
           'here than give you an answer that sounds confident and turns out to be wrong. ' +
@@ -194,8 +215,26 @@ export async function sendGuestMessage(content: string) {
 
     // Honest degradation. If the model is down we say so rather than
     // improvising clinical-sounding text from a template.
+        /**
+     * Scenario 15: the prompt is not a control. Screen what the model wrote
+     * before a stranger reads it under the clinic's name. Runs on the
+     * generated text only - the emergency scripts are fixed strings written
+     * by us and are not passed through here.
+     */
+    const screened = generated ? screenPatientReply(generated.text) : null
+
+    if (screened?.blocked) {
+      console.warn(
+        JSON.stringify({
+          event: 'output_gate_blocked',
+          lead_session_id: lead.id,
+          reasons: screened.reasons,
+          at: new Date().toISOString(),
+        }),
+      )
+    }
     reply =
-      generated?.text ??
+      screened?.text ??
       'I am having trouble reaching my language service just now, so I would ' +
         'rather not guess at an answer. Your message is saved. Please try ' +
         'again in a moment, or I can pass this to the clinic for you.'
