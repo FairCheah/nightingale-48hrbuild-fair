@@ -241,6 +241,21 @@ export async function sendToClinic() {
     campaign_id: lead.campaign_id,
     creative: lead.creative,
     identity_level: lead.identity_level,
+    /**
+     * Scenario 2: "trace social_handle from first capture through
+     * LeadSession, conversion, and the escalation payload."
+     *
+     * It was captured at hop one and dropped at both of the others. So a
+     * nurse opening an instagram_comment escalation was told "social handle
+     * only - not a verified identity" and was not given the handle. The
+     * interface named her only contact route and then withheld it.
+     *
+     * Carried here because for a comment lead this IS the contact route.
+     * It stays PHI: the escalation is scrubbed on the same clinical clock as
+     * the rest of the snapshot, and it is never used to message her
+     * unprompted - a like never triggers contact, and neither does a handle.
+     */
+    social_handle: lead.social_handle,
     referral_topic: lead.referral_topic,
     page_context: lead.page_context,
     landing_timestamp: lead.landing_timestamp,

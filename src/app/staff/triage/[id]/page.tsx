@@ -51,6 +51,7 @@ type Acquisition = {
   campaign_id?: string | null
   creative?: string | null
   identity_level?: string | null
+  social_handle?: string | null
   referral_topic?: string | null
   page_context?: string | null
   landing_timestamp?: string | null
@@ -386,6 +387,23 @@ export default async function EscalationDetail({
                 ? 'social handle only — not a verified identity'
                 : 'anonymous — no verified identity'}
           </p>
+                    {/*
+            For a comment lead this is the only route she has given, and the
+            page used to name it — "social handle only" — without showing it.
+            The warning matters: a nurse who DMs an Instagram handle puts a
+            fertility clinic on someone's public profile, and outbound DM
+            needs Meta App Review anyway.
+          */}
+          {acq.social_handle && (
+            <p className="mt-1">
+              Handle: {acq.social_handle} — the only route she has given.
+              Replying here is private; a direct message is not.
+            </p>
+          )}
+
+          {acq.referral_topic && (
+            <p className="mt-1">Staff referral: {acq.referral_topic}</p>
+          )}
           {acq.referral_topic && (
             <p className="mt-1">Staff referral: {acq.referral_topic}</p>
           )}
