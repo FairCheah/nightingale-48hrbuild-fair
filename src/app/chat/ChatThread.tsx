@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { sendGuestMessage } from './actions'
 import ProfilePanel, { type MemoryItem } from './ProfilePanel'
 import { sendToClinic } from './escalate'
+import ContactPreference from './ContactPreference'
 
 export interface ChatMessage {
   id: string
@@ -14,8 +15,13 @@ export interface ChatMessage {
   risk_level: string | null
   risk_reason: string | null
   escalation_required: boolean
+  /**
+   * Whether this clinic can act on the concern, from assessKeywordRisk.
+   * Optional because rows written before migration 23 do not have it, and
+   * chat/page.tsx falls back for those.
+   */
+  scope?: string | null
 }
-
 /**
  * A source the assistant actually used, per §6. Only ids the model was given
  * are ever stored, so a citation here always resolves to a real span.
@@ -54,6 +60,7 @@ export default function ChatThread({
   memoryItems,
   canEscalate,
   alreadyEscalated,
+  contactPreference,
   showInvite,
   patientEmail,
   weeklyStat,
@@ -68,6 +75,7 @@ export default function ChatThread({
   memoryItems: MemoryItem[]
   canEscalate: boolean
   alreadyEscalated: boolean
+  contactPreference: string | null
   showInvite: boolean
   patientEmail: string | null
   weeklyStat: string | null
@@ -486,8 +494,8 @@ export default function ChatThread({
             <p
               className="rounded-2xl px-4 py-2.5 text-center text-xs"
               style={{
-                backgroundColor: 'rgba(111, 143, 132, 0.12)',
-                color: 'var(--fb-primary-dk)',
+                backgroundColor: 'rgba(146, 172, 126, 0.14)',
+                color: 'var(--fb-text)',
               }}
             >
               {activeRisk === 'high'
@@ -495,6 +503,17 @@ export default function ChatThread({
                 : 'A nurse at Fairbloom has this and will review it within 12–18 hours.'}
             </p>
           </div>
+        )}
+
+        {/*
+          Asked AFTER the case is sent, never before it. Putting a contact
+          form in front of the button would make identifying yourself the
+          price of being helped, and it would fail worst for the person least
+          able to pay it. Her words are already with the nurse; this only
+          decides how the reply travels.
+        */}
+        {alreadyEscalated && (
+          <ContactPreference existingPreference={contactPreference} />
         )}
 
         <div className="mx-auto w-full max-w-2xl px-4 pb-3 pt-3">

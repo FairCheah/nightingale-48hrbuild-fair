@@ -64,9 +64,19 @@ export async function sendToClinic() {
 
   const admin = createAdminClient()
 
-  // The triggering message: the most recent guest turn that required
-  // escalation. This is what the clinician sees first.
-  const { data: trigger } = await admin
+  /**
+   * The triggering message: the most recent guest turn the risk gate flagged.
+   *
+   * If nothing was flagged, fall back to her most recent message. Brief §8
+   * escalates on Med/High risk OR when the patient wants clarity or a human,
+   * and only the first half was built here — so a person on a low-risk
+   * conversation who asked for a nurse was told there was nothing to send.
+   *
+   * The nurse still sees the real risk level, which will read low. That is
+   * accurate and useful: it distinguishes "the system flagged this" from
+   * "she asked for us", and those deserve different attention.
+   */
+  const { data: flagged } = await admin
     .from('messages')
     .select('id, content, content_redacted, risk_level, risk_reason, created_at')
     .eq('lead_session_id', lead.id)
@@ -76,8 +86,23 @@ export async function sendToClinic() {
     .limit(1)
     .maybeSingle()
 
+  let trigger = flagged
+
   if (!trigger) {
-    return { error: 'There is nothing here that needs a clinician yet.' }
+    const { data: latest } = await admin
+      .from('messages')
+      .select('id, content, content_redacted, risk_level, risk_reason, created_at')
+      .eq('lead_session_id', lead.id)
+      .eq('sender', 'guest')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    trigger = latest
+  }
+
+  if (!trigger) {
+    return { error: 'Tell me a little about what is going on first.' }
   }
 
   // Refuse a duplicate: a second press should not create a second case.

@@ -121,6 +121,18 @@ export default async function ChatPage() {
       messages.map((m) => m.id),
     )
 
+      /**
+   * How she asked to be reached, if she has said. Null means she has not been
+   * asked yet, or answered nothing. Read here rather than inferred from
+   * whether an email exists — "I'll check back here" is a stated choice, and
+   * an absence of contact details cannot express it.
+   */
+  const { data: leadRow } = await admin
+    .from('lead_sessions')
+    .select('contact_preference')
+    .eq('id', lead.id)
+    .maybeSingle()
+
   // §2a — the most recent articulation card, if one has been generated.
   const { data: cardRow } = await admin
     .from('value_events')
@@ -137,8 +149,26 @@ export default async function ChatPage() {
       clinicFullName={CLINIC_FULL_NAME}
       activeRisk={latest?.risk_level ?? null}
       memoryItems={(memoryRows ?? []) as MemoryItem[]}
-      canEscalate={Boolean(latest?.escalation_required) && !openCase}
+      /**
+       * Brief §8 triggers the handoff on Med/High risk "or when patient is
+       * sounding unsure, wanting more clarity or a diagnosis". Only the first
+       * half was built, so escalation was something the risk gate decided FOR
+       * her and never something she could ask for.
+       *
+       * The result was worse than a missing feature: the assistant would write
+       * "I can pass this to a nurse" on a low-risk turn and no button existed,
+       * so a person who answered "yes please" got nothing. A promise broken in
+       * the same screen it was made.
+       */
+      canEscalate={
+        !openCase &&
+        (Boolean(latest?.escalation_required) ||
+          messages.some(
+            (m) => m.sender === 'guest' || m.sender === 'patient',
+          ))
+      }
       alreadyEscalated={Boolean(openCase)}
+      contactPreference={leadRow?.contact_preference ?? null}
       patientEmail={patientEmail}
       weeklyStat={weeklyStat?.text ?? null}
       articulationCard={cardRow?.payload ?? null}
