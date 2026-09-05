@@ -57,10 +57,25 @@ export async function createReferralLink(topic: string) {
     .single()
 
   if (leadError || !lead) {
-    console.error('LEAD INSERT FAILED:', leadError)
+    /**
+     * Structured and PHI-free, like every other log in this codebase. This
+     * was the one exception: it dumped the raw Supabase error object, and a
+     * Postgres constraint violation echoes the offending value in `details`
+     * — which here is referral_topic, free text a staff member typed about
+     * a patient.
+     *
+     * Scenario 11 asks which loggers can see message content. This one could,
+     * and it was the only one.
+     */
+    console.error(
+      JSON.stringify({
+        event: 'lead.insert_failed',
+        code: leadError?.code ?? 'unknown',
+        clinic_id: profile.clinic_id,
+      }),
+    )
     return { error: 'Could not create the link. Please try again.' }
   }
-
   // 3. Funnel event: a visitor now exists.
   await admin.from('events').insert({
     clinic_id: profile.clinic_id,
