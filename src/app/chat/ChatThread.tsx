@@ -224,10 +224,16 @@ export default function ChatThread({
       <header className="sticky top-0 z-10 border-b border-[var(--fb-border)] bg-[var(--fb-surface)]/90 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
           <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-[var(--fb-text)]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full"
             style={{ backgroundColor: 'var(--fb-lilac)' }}
           >
-            N
+            <img
+              src="/nightingale-mark.png"
+              alt=""
+              width={36}
+              height={36}
+              className="h-full w-full object-cover"
+            />
           </div>
           <button
             type="button"
