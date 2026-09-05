@@ -102,6 +102,14 @@ const HIGH_RULES: Rule[] = [
       /(arm|jaw) (pain|numb)/i,
       /cold sweat/i,
       /heart attack/i,
+
+            // --- Bahasa Malaysia and Manglish ---
+      /sakit dada/i,
+      /dada (saya |aku )?(sakit|pedih|berat|sesak)/i,
+      /dada.{0,20}(ditekan|tertekan|berat|sesak|kuat)/i,
+      /chest.{0,20}(sakit|tight|berat|pedih)/i,
+      /serangan jantung/i,
+      /jantung.{0,15}(sakit|berdebar kuat)/i,
     ],
   },
   {
@@ -145,6 +153,13 @@ const HIGH_RULES: Rule[] = [
       /gasping/i,
       /(lips|fingers) (are )?blue/i,
       /choking/i,
+
+            // --- Bahasa Malaysia and Manglish ---
+      /susah (nak |untuk )?(bernafas|nafas|breathe|bernapas)/i,
+      /(tak|tidak) (boleh|dapat|larat) (bernafas|nafas|bernapas|breathe)/i,
+      /sesak nafas/i,
+      /nafas.{0,15}(pendek|cepat|berat|tercungap)/i,
+      /lemas/i,
     ],
   },
   {
@@ -159,6 +174,17 @@ const HIGH_RULES: Rule[] = [
       /h(a)?emorrhag/i,
       /bleeding (after|since) (delivery|birth|c.?section|surgery)/i,
       /losing (a lot of )?blood/i,
+
+            // --- Bahasa Malaysia and Manglish ---
+      // "banyak" alone is not enough: "darah haid tak banyak" means the
+      // opposite. The intensifier has to be attached to the bleeding.
+      /berdarah (sangat )?banyak/i,
+      /darah (keluar )?banyak sangat/i,
+      /darah keluar banyak/i,
+      /berdarah (tak|tidak) berhenti/i,
+      /darah.{0,15}(tak|tidak) berhenti/i,
+      /pendarahan (teruk|banyak|berat)/i,
+      /bleeding banyak/i,
     ],
   },
   {
@@ -175,6 +201,10 @@ const HIGH_RULES: Rule[] = [
       /(no|reduced) (fetal|foetal|baby) movement/i,
       /water (broke|breaking)/i,
       /(seizure|fitting|convulsion)/i,
+            // --- Bahasa Malaysia and Manglish ---
+      /keguguran/i,
+      /(sakit|pedih) perut.{0,20}(teruk|sangat|berdarah)/i,
+      /perut.{0,20}(sakit|pedih).{0,15}(teruk|sangat)/i,
     ],
   },
   {
@@ -220,6 +250,14 @@ const HIGH_RULES: Rule[] = [
       /end it all/i,
       /can'?t (do this|go on) anymore/i,
       /want to disappear/i,
+
+            // --- Bahasa Malaysia and Manglish ---
+      /bunuh diri/i,
+      /(nak|ingin|mahu|hendak) mati/i,
+      /cederakan diri/i,
+      /(tak|tidak) (nak|mahu|ingin) hidup/i,
+      /(tak|tidak) larat (lagi|hidup)/i,
+      /hilangkan diri/i,
     ],
   },
   {
