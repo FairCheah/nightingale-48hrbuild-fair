@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
     /**
+   * Hides Next's dev toolbar - the black circle bottom-left that expands into
+   * Route / Bundler / Turbopack. Dev-only chrome, but it sits in the corner of
+   * every frame when the app is being filmed.
+   */
+  devIndicators: false,
+    /**
    * Next 16 traces server action arguments to stdout in dev, so the patient's
    * raw message was printed on every turn:
    *   sendGuestMessage("pineapple marmalade seventeen")
