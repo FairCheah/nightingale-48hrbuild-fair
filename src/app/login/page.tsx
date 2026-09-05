@@ -27,7 +27,12 @@ function LoginForm() {
       return
     }
 
-    const next = searchParams.get('next') ?? '/staff/referral'
+    /**
+     * /resume decides where to go, because only the server knows the role.
+     * This used to default to /staff/referral for everyone, so a patient
+     * logging in was immediately bounced by the proxy with denied=staff_area.
+     */
+    const next = searchParams.get('next') ?? '/resume'
     router.push(next)
     router.refresh()
   }
