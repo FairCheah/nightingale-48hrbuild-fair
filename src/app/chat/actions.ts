@@ -137,6 +137,24 @@ export async function sendGuestMessage(content: string) {
 
   if (risk.level === 'high' && risk.emergencyKind) {
     reply = EMERGENCY_SCRIPTS[risk.emergencyKind].body
+
+    /**
+     * Say why there is no Fairbloom button.
+     *
+     * The scope explanation lived only in the medium branch, so on a high-risk
+     * out-of-scope message she got the 999 script and then watched the option
+     * to reach the clinic simply not appear. A control vanishing without a
+     * reason reads as a glitch, and this is the worst possible moment to look
+     * broken. Naming the limit is the same honesty as refusing to offer a
+     * nurse who cannot help.
+     */
+    if (risk.scope === 'out_of_scope' && risk.emergencyKind === 'medical') {
+      reply +=
+        '\n\nI should also be clear about why I am not offering to pass this ' +
+        'to Fairbloom: we are a fertility and women\u2019s health clinic, and ' +
+        'this is not something our nurses can assess. Emergency care is the ' +
+        'right place for it, and sending it to us would only delay you.'
+    }
   } else if (risk.level === 'med') {
     const honest =
       'Thank you for telling me — I want to be honest with you rather than guess. ' +
