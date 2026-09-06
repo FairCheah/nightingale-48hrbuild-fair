@@ -47,6 +47,12 @@ Anthropic Claude Haiku 4.5   (claude-haiku-4-5-20251001)
   Commercial Terms of Service. The model is not fine-tuned, and no data
   from this build was used for training.
 
+  Anthropic's commercial retention policy deletes API inputs and outputs
+  within thirty days, and up to two years where a session is flagged for a
+  usage-policy violation. Everything this build sends across that boundary
+  has already been redacted, which is why redaction runs before the model
+  rather than after it.
+
   src/lib/llm.ts is provider-agnostic. Nothing above that file knows which
   model answered; swapping providers is a change to one file.
 
@@ -100,6 +106,18 @@ These organisations are named as referral routes only. They have no
 affiliation with this project.
 
 
+LANGUAGE COVERAGE
+--------------------------------------------------------------------------
+The deterministic emergency floor covers English, Bahasa Malaysia, and the
+code-switched Manglish patterns Malaysian patients commonly use. Malay
+patterns were written and checked by the author, who speaks the language.
+
+Mandarin and Tamil are NOT covered. Both are widely spoken by Malaysian
+patients. They were omitted rather than guessed at: an unverified emergency
+pattern is worse than an absent one, because it looks like coverage.
+Closing this needs a native speaker with clinical vocabulary.
+
+
 DEVELOPMENT TOOLS
 --------------------------------------------------------------------------
 Claude (Anthropic) was used as a pair programmer throughout: architecture
@@ -108,6 +126,12 @@ Every design decision, every departure from the brief, and every line that
 shipped was reviewed and accepted by the author. Several of the build's
 better decisions — scope-aware routing, the refusal to act on likes, the
 in-scope/out-of-scope split — came from questioning what was proposed.
+
+Round Two continued that. Reading a triage screen and finding the sentence
+did not make sense surfaced a redaction bug that had been deleting clinical
+language; asking whether the retention purge had ever actually run surfaced
+one that reported success while deleting nothing. Neither was caught by the
+test suite, which passed throughout.
 
 VS Code, Git, Supabase SQL Editor.
 
@@ -123,4 +147,4 @@ TRADEMARKS
 --------------------------------------------------------------------------
 "Fairbloom Fertility & Women's Health" is a fictional clinic invented for
 this exercise. Instagram, TikTok and Facebook are trademarks of their
-respective owners and are referenced only as acquisition channels.
+respective owners are referenced only as acquisition channels.

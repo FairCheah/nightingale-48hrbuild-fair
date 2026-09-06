@@ -1,18 +1,45 @@
 # Nightingale — Fairbloom Fertility & Women's Health
 
-A first-touch-to-care messenger. Someone arrives from an ad, a comment, a link a nurse handed them, or the clinic's website. They can ask a real question without an account, get a grounded answer, and — if and when they choose — become a patient with everything they already said carried forward intact.
+Nightingale is a first-touch-to-care messenger for a fictional fertility and women's health clinic.
 
-**Why this clinic.** Fairbloom is fictional, and the specialty was chosen deliberately. Fertility, women's health and sexual health carry stigma, and stigma is what makes someone read a clinic's page at 2am rather than ask. Nearly every decision in this build traces back to that: the guest can talk without signing up, the browser tab says "Secure message" rather than the clinic's name, guest conversations are destroyed after 14 days, the shareable card carries no branding, opening prompts exist so nobody has to compose the first sentence, and a like on a post never triggers a DM.
+A patient can arrive from an ad, referral link, social channel or the clinic website, ask a question without creating an account, receive initial support, and request human review. If she later chooses to create an account, the conversation and context she has already shared can move forward with her.
 
-The audience is women seeking reproductive and sexual health care. The safety scope is anyone who arrives, whatever they say — a person with crushing chest pain who happens to be on a fertility clinic's page is still a person with crushing chest pain, so cardiac, stroke and respiratory phrases are handled in full.
+Fairbloom was chosen as a fictional fertility and women's health clinic because these are areas where privacy, stigma and hesitation can strongly affect whether someone asks for help.
 
-> **Stack:** Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 · Supabase (Postgres, Auth, RLS) · Anthropic Claude Haiku 4.5 · Vitest
+> **Stack:** Next.js 16 · TypeScript · Tailwind CSS · Supabase (Postgres, Auth, RLS) · Anthropic Claude Haiku 4.5 · Vitest
+
+## Round Two
+
+Round Two focused mainly on stress-testing the existing build rather than adding a large number of new features.
+
+The main additions and fixes include:
+
+- clinician triage queue and case view
+- clinician replies returning to the patient's Nightingale conversation
+- clinician-only case closure with closure reason and internal handover note
+- patient-requested human review
+- optional contact preference after escalation
+- cross-device recovery after patient authentication
+- English, Malay and common Manglish deterministic emergency rules
+- output-side safety checks on patient-facing AI responses
+- improved Living Memory correction history
+- fixes to guest-data retention, redaction and clinical workflow paths
+
+The detailed assessment of all 21 feedback scenarios is included in the Round Two Technical Brief.
 
 ---
 
-## Setup
+# Setup
 
-**Prerequisites:** Node 20+, a Supabase project, an Anthropic API key.
+## Prerequisites
+
+You will need:
+
+- Node.js 20+
+- a Supabase project
+- an Anthropic API key
+
+Clone and install:
 
 ```bash
 git clone <repo-url>
@@ -20,49 +47,56 @@ cd nightingale-app
 npm install
 ```
 
-### 1. Environment
+## 1. Environment variables
 
 Create `.env.local` in the project root:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
-SUPABASE_SERVICE_ROLE_KEY=<service role key>
-ANTHROPIC_API_KEY=sk-ant-<your key>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+ANTHROPIC_API_KEY=sk-ant-<your-key>
 ```
 
-Supabase keys are under Project Settings → API. The service role key bypasses RLS and is server-only — `src/lib/supabase/admin.ts` throws if it is ever constructed in a browser.
+The Supabase service-role key is server-only and must never be exposed to the browser.
 
----
+## 2. Database
 
-### 2. Database
+Run the SQL files in `supabase/migrations/` in numerical order.
 
-Run everything in `supabase/migrations/` in numerical order through the Supabase SQL Editor. They are numbered by execution order, not by date. 07 through 09 are fixes to earlier migrations and must not be skipped.
+Round One migrations contain the base schema, authentication, RLS, channel rules, conversion and guest-retention logic.
+
+Round Two adds:
 
 ```text
-01_initial_schema.sql              13 tables, RLS enabled, indexes, seed clinic
-02_rls_policies.sql                initial policy set
-03_seed_channel_rules.sql          23 channel rules incl. 6 intent-based
-04_rls_role_refinement.sql         patient / staff / nurse / clinician separation
-05_auth_bootstrap.sql              auth.users -> app_users, role forced to 'patient'
-06_seed_users.sql                  assigns care-team roles to the test accounts
-07_fix_app_users_recursion.sql     RLS recursion fix on app_users
-08_fix_grants.sql                  restores authenticated SELECT
-09_fix_service_role_grants.sql     restores service_role DML
-10_conversion_and_retention.sql    migration consent, message scope, 14-day retention, purge function
-11_channel_rules_ai_wording.sql    "AI assistant", never just "assistant"
-12_opening_chips.sql               opening chips on channel rules
-13_lead_chips.sql                  opening chips column on lead sessions
-14_referral_template.sql           referral template quotes the staff note
-15_guest_content_visibility.sql    guest content hidden from staff until consent
-16_schedule_purge.sql              nightly pg_cron job running the purge
+17_retention_integrity.sql
+18_reachability.sql
+19_escalation_patient_link.sql
+20_responder_identity.sql
+21_neutral_responder_names.sql
+22_case_closure.sql
+23_message_scope.sql
+24_contact_preference.sql
+25_clinical_reply_grants.sql
+26_night_opening_promise.sql
 ```
 
----
+Important Round Two changes include:
 
-### 3. Test accounts
+- guest-retention integrity fixes
+- clinician responses
+- escalation response deadlines
+- PatientSession links on escalations
+- responder identity
+- clinician-only case closure
+- stored message scope
+- patient contact preference
+- clinical reply permissions
+- correction of unsupported after-hours wording
 
-Create these four in Supabase → Authentication → Users, then run `06_seed_users.sql` to assign roles. Self-signup always yields patient; care-team roles are provisioned deliberately, never self-selected.
+## 3. Test accounts
+
+Create the accounts in Supabase Authentication and assign the corresponding care-team roles using the seed migration.
 
 | Email | Role | Password |
 |---|---|---|
@@ -71,187 +105,349 @@ Create these four in Supabase → Authentication → Users, then run `06_seed_us
 | `nurse@fairbloom.test` | nurse | `Fairbloom123!` |
 | `clinician@fairbloom.test` | clinician | `Fairbloom123!` |
 
----
+Self-signup creates a patient account. Care-team roles are provisioned separately rather than selected by the user.
 
-### 4. Run
+## 4. Run locally
 
 ```bash
 npm run dev
 ```
 
-## Where to go
-
-### As a guest — use an incognito window
-
-The guest identity is an httpOnly cookie, so open a fresh incognito window per visitor. Closing every incognito window clears it.
-
-| URL | Channel |
-|---|---|
-| `/hello` | website_widget |
-| `/hello?source=instagram_ad_click&campaign=ivf_over40&creative=carousel_a` | instagram_ad_click with attribution |
-| `/hello?source=google_reviews` | google_reviews |
-
-An ad click is a URL with tracking parameters, which is exactly what the second link is. Meta appends those parameters and sends the person to the clinic's destination URL; everything after the click is this system.
-
-`/chat` and `/continue` become reachable once a session exists — they need the cookie.
-
-**Try:** send two or three messages, watch the profile panel fill, then use Continue securely with Fairbloom.
-
-### As care team — normal window, sign in first
-
-| URL | What |
-|---|---|
-| `/login` | Sign in |
-| `/staff/leads` | Conversion metrics per channel, warm-lead view |
-| `/staff/referral` | Generate a patient link from a visit |
-| `/staff/social` | Instagram comment webhook simulator |
-
-Sign in as nurse@, look at `/staff/leads`, then sign out and look again as staff@. Same page, same data, visibly different: clinical concerns and contact details are hidden from the staff role, while the "do not contact for marketing" flag on a high-risk lead stays visible to both.
-
----
-
-## Running the tests
-
-```bash
-npm test
-```
-
-**43 tests across 8 files.** All eight tests named in the brief are implemented. They run against the real Supabase project using synthetic data only; database-backed tests create their own rows and delete them afterwards.
-
-| File | Brief test | Covers |
-|---|---:|---|
-| `test_guest_to_patient_conversion.test.ts` | 1 | Arrival with campaign attribution, auth, three consents, relink-not-copy migration. Provenance resolves to the original GuestMessage; attribution reachable from the patient session. A declined migration leaves the conversation behind. |
-| `test_value_events.test.ts` | 2 | Every statistic re-derives from its own stored query. Below threshold, nothing renders. The shareable card stays under 240 characters and carries no branding. |
-| `test_escalation_payload.test.ts` | 3 | Triggering message, triage summary, profile snapshot, resolving provenance, acquisition context. Status field and room for a clinician response. Nothing unredacted in the payload. |
-| `test_risk_escalation.test.ts` | 4 | The four brief-mandated phrases, ambiguity handling, scope routing, and the asymmetric combiner — the model may raise risk, never lower it. |
-| `test_memory_mutation.test.ts` | 5 | "I take Advil" → "Actually I stopped" leaves two rows, each with provenance resolving to the message that produced it, linked by supersedes. |
-| `test_redaction.test.ts` | 6 | Names, Malaysian and Singapore IC, phones in several written forms, emails, social handles. Clinical language left intact. Audit summaries carry counts only. Fails closed. |
-| `test_access_control.test.ts` | 7 | Signs in as real users through the anon key, so it tests the client path rather than the service role. Patient A cannot read Patient B. Audit logs unreachable by every role. No client can INSERT a message. |
-| `test_trust.test.ts` | 8 | Scripted responses never claim clinical authority, always route to a real human, never offer false reassurance. Citation ids are unique and resolve. |
-
-The brief names the tests with `.py` extensions. This is a TypeScript project, so they are Vitest rather than pytest — adding a Python runtime for eight files would have been a worse decision than keeping the tests in the language the code is written in. The names are preserved.
-
----
-
-## Where redaction happens
-
-`src/lib/redaction.ts` — the only gate between patient text and any language model.
-
-Called from `src/app/chat/actions.ts` in `sendGuestMessage()`, immediately after the raw message is stored and before any LLM call:
-
-```ts
-const redaction = safeRedact(text)
-```
-
-**Then:**
-
-- `messages.content` keeps what the patient actually said. They must see their own words, and a clinician needs the real thing.
-- `messages.content_redacted` is what travels to the model. `loadRedactedHistory()` reads only that column.
-- Assistant turns are redacted too. Not obvious, but the channel opening interpolates the person's social handle from the rules table, so an unredacted assistant turn would send @their_handle to the model even though the guest never typed it.
-- `src/app/chat/escalate.ts` and `src/lib/value-events.ts` receive redacted text only.
-
-**Deterministic regex, not a model.** Using an LLM to find PHI means sending the raw PHI to an LLM to discover what the PHI was. Regex is auditable, offline, and cannot fail open through a network timeout.
-
-**Fails closed.** `safeRedact()` catches any exception and returns `[REDACTION_FAILED — message withheld from model]`. There is no path where a redaction failure results in raw text reaching a model.
-
-**Covers:** explicit self-identification of names, Malaysian NRIC (YYMMDD-PB-###G), Singapore-style NRIC (S1234567A), Malaysian mobile and landline in several written forms, email addresses, and social handles.
-
-Audit logs carry counts, never values — `{ ic: 1, name: 1 }`, never the identifiers themselves.
-
-**Honest limitation:** names are matched on explicit self-identification ("my name is X", "I am X"). A bare "John Doe" with no introducing phrase is not caught. Matching capitalised words generally would destroy clinical text — "Advil", "Monday", "Fairbloom". Mitigations: the model is instructed never to echo identifiers, and guest content is hidden from staff until consent regardless.
-
----
-
-## How RBAC is enforced
-
-Three independent layers. No single layer is trusted alone.
-
-### 1. Proxy — `src/proxy.ts`
-
-Runs before any page code. Refreshes the session, then blocks `/staff/*` for anyone unauthenticated or holding a non-care-team role. Verified: a patient hitting `/staff/referral` is redirected to `/?denied=staff_area`.
-
-### 2. Server components — `src/app/staff/layout.tsx`
-
-Re-reads the caller's role and redirects independently of the proxy. `src/app/staff/leads/page.tsx` then uses that role to decide what to fetch: clinical concerns and contact details are queried only for nurse and clinician, and only where `staff_visible` is true.
-
-### 3. Row Level Security — migrations 02, 04, 07
-
-| Role | Sees |
-|---|---|
-| guest | No account, never touches the database. The server acts on their behalf via an httpOnly recovery token. |
-| patient | Their own data only, everywhere. |
-| staff | Acquisition only — leads, funnel, value events. No clinical content, no contact details. |
-| nurse | Acquisition + clinical read + escalation response. |
-| clinician | Nurse, plus authority to close a case. Enforced by a database trigger reading the acting role from `auth.jwt()`. |
-
-Writes are server-side only. No INSERT is granted to authenticated on any table. Every message, memory item and escalation is written by the server after redaction and risk gating have run, so neither can be bypassed by talking to the API directly. `test_access_control` asserts this by attempting the insert as a real signed-in user and expecting failure.
-
-`audit_logs` has no RLS policy and no client grant — deny by default, service role only.
-
-Guest content is hidden from staff until consent. `lead_sessions.staff_visible` becomes true only when a `patient_session` with `consent_given` exists, or when the person explicitly sent an escalation. Asking for a human is itself consent to be read by one.
-
----
-
-## Codebase map
+Then open:
 
 ```text
-src/lib/
-  redaction.ts       PHI redaction. The only gate to any model.
-  risk.ts            Deterministic keyword floor, four emergency scripts, scope routing.
-  nightingale-ai.ts  Two model calls: risk classifier, then conversation.
-  llm.ts             Provider-agnostic client. Timeouts, one retry, null on failure.
-  memory.ts          Living Memory extraction and mutation detection.
-  knowledge.ts       Curated grounding corpus. Citations resolve to real spans.
-  value-events.ts    Articulation card + the honest live statistic.
-  channel-rules.ts   Rule resolver. Zero channel-specific logic.
-  social.ts          Instagram webhook parsing + HMAC signature verification.
-  guest.ts           Guest session resolution, rate limiting.
-  retention.ts       14-day policy. Single source of truth.
-
-src/app/
-  hello/             Open door — ad clicks, website widget, review links.
-  start/[token]/     Landing. Sets the cookie, seeds the channel opening.
-  chat/              The messenger. actions.ts is the single write path.
-  continue/          Signup, three consents, provenance-preserving migration.
-  staff/             Care team console: leads, referral, social simulator.
-  api/webhooks/      Instagram comment webhook.
-
-supabase/migrations/ 01–15, run in order.
-tests/               Eight named tests plus shared helpers.
+http://localhost:3000
 ```
 
 ---
 
-## Failure modes
+# Useful routes
 
-| Failure | Behaviour |
+## Guest / patient
+
+| Route | Purpose |
 |---|---|
-| LLM times out or errors | `callLlm()` returns null after a hard timeout. The conversation degrades honestly — "I am having trouble reaching my language service just now, so I would rather not guess" — rather than improvising clinical-sounding text. One retry on 429 and 5xx only; a 400 fails identically twice. |
-| Risk classifier is slow | 6-second timeout, shorter than the reply timeout. If it misses the window the deterministic keyword floor decides alone. An emergency is never delayed by a slow classifier. |
-| Model returns bad JSON | `parseJsonResponse()` returns null and the caller treats it as "no opinion". For risk that means the keyword verdict stands. |
-| Redaction throws | `safeRedact()` returns a withheld marker. No path exists where a redaction failure results in raw text reaching a model. |
-| Auth is down | `/staff/*` fails closed — no session means redirect to login. Guests are unaffected: their identity is a cookie plus a database lookup with no auth dependency, so someone mid-crisis can still reach a nurse. |
-| Triage summariser fails during escalation | The escalation is still created, with a placeholder bullet directing the clinician to read the conversation. Telling a frightened person "try again later" after they asked for a human is the wrong failure. |
-| Memory extraction fails | Caught and swallowed. The profile degrades, the conversation does not. A missing fact is safer than a wrong one in a record a clinician will read. |
-| Model invents a citation id | Dropped. Only ids the model was actually given can resolve, so a hallucinated citation is never stored. |
-| Webhook signature fails | 403, not 400 — an unsigned request is forged, not malformed, and Meta should not retry it. |
-| Duplicate escalation | Refused. A second press returns the existing case rather than opening a second one. |
+| `/hello` | Fresh Nightingale entry |
+| `/chat` | Patient conversation |
+| `/continue` | Secure conversion / signup |
+| `/login` | Login |
+| `/resume` | Restore an authenticated patient's existing conversation |
+| `/link-invalid` | Honest expired or invalid-link state |
+
+Example acquisition URL:
+
+```text
+/hello?source=instagram_ad_click&campaign=ivf_over40&creative=carousel_a
+```
+
+For a fresh guest session, use an incognito window.
+
+## Care team
+
+| Route | Role | Purpose |
+|---|---|---|
+| `/staff/triage` | nurse, clinician | Clinical escalation queue |
+| `/staff/leads` | care team | Funnel and warm-lead view |
+| `/staff/referral` | care team | Generate patient referral links |
+| `/staff/social` | care team / demo | Social comment simulator |
+
+### Suggested clinical workflow
+
+1. Sign in as a nurse.
+2. Open `/staff/triage`.
+3. Review an escalation and send a reply.
+4. Return to the patient's conversation and confirm the reply appears in the thread.
+5. Sign in as a clinician.
+6. Open the same case.
+7. Close the case with a closure reason and internal handover note.
+
+Nurses can review and reply to a case, but only clinicians can close it.
 
 ---
 
-## Known gaps
+# Running the tests
 
-> Named rather than hidden.
+Run:
 
-- The earned email is not built. The conversion flow and the transactional-versus-marketing consent split it depends on both exist, and `email_sends` is in the schema with a `consent_reference` column. The send itself was cut: there is no mail transport in this build, and a fake send would be worse than an honest gap.
-- The Instagram DM is prepared, not sent. Signature verification, payload parsing, identity level, deduplication and reply construction are real. Sending requires the `instagram_manage_messages` permission and Meta App Review against a live Business account. `/staff/social` states exactly where the boundary is.
-- The knowledge corpus was not clinician-reviewed. Entries are restricted to durable public-health statements with named sources rather than precise figures that shift year to year. A real deployment replaces `src/lib/knowledge.ts` with reviewed content; nothing else changes.
-- PWA manifest without icons. Present and valid; icons omitted rather than shipping broken references.
-- Encryption at rest is Supabase's default, not column-level. Sensitive guest content is protected by access control rather than by a separate encryption key.
-- Conflict flagging on contradictions — the `conflict_flag` column exists and is always false. Listed as a bonus in the brief; not implemented.
+```bash
+npx vitest run
+```
+
+The current Round Two suite contains **52 tests across 11 files**.
+
+Scenario-specific tests cover the areas prioritised during Round Two:
+
+| Test | Covers |
+|---|---|
+| `test_scenario_08_deterministic_floor` | Emergency floor and model-can-raise-but-not-lower behaviour |
+| `test_scenario_09_multilingual_floor` | 25 Malay and Manglish emergency phrasings, English baseline and correct emergency-path selection |
+| `test_scenario_10_redaction_order` | Risk-before-redaction ordering and PHI patterns |
+| `test_scenario_12_guest_retention` | Guest-data destruction path |
+| `test_scenario_15_output_gate` | Unsafe patient-facing AI output |
+| `test_scenario_16_correction_chain` | Living Memory corrections |
+| `test_scenario_17_guest_facts_survive` | Guest facts surviving conversion |
+| `test_scenario_18_payload_read_cold` | Clinical handoff payload |
+| `test_scenario_20_access_control` | Authenticated access-control behaviour |
+
+Two additional `test_brief_*` files cover Round One requirements rather than one specific Round Two scenario.
+
+Some Round Two scenarios were also verified manually, including provider failure and authenticated cross-device recovery.
+
+### Scenario 20 note
+
+The access-control test verifies important authenticated isolation behaviour, including patient-to-patient isolation, protected audit logs and denied client-side message writes.
+
+However, I have **not yet completed a full end-to-end test using two separate clinic identities**.
+
+For that reason, Scenario 20 is marked **PARTIAL** in the Technical Brief rather than claiming that multi-clinic isolation is fully proven.
 
 ---
 
-## Synthetic data only
+# Where redaction happens
 
-No real patient data appears in this repository, the database, or the demo. All accounts, conversations and clinical content were fabricated for this build.
+PHI redaction lives in:
+
+```text
+src/lib/redaction.ts
+```
+
+Patient messages follow this order:
+
+```text
+raw patient message
+        ↓
+deterministic risk rules
+        ↓
+redaction
+        ↓
+LLM
+        ↓
+patient-facing response
+```
+
+The ordering is deliberate.
+
+Emergency risk is assessed on the patient's original message before redaction. This prevents a redaction pattern from accidentally removing a clinically important phrase before the deterministic safety rules see it.
+
+Only the redacted version is sent to the language model.
+
+The redactor covers items including:
+
+- explicitly introduced names
+- Malaysian MyKad / NRIC patterns
+- Singapore-style IDs
+- Malaysian phone numbers
+- email addresses
+- social handles
+
+`safeRedact()` fails closed. If redaction itself fails, the raw message is withheld from the model rather than being sent unredacted.
+
+Round Two also fixed a name-redaction bug that was removing clinical language. For example:
+
+```text
+Original:  I am having difficulty breathing
+Redacted:  I am [NAME_1]
+```
+
+The deterministic risk rules still classified the message correctly because they run on the raw message before redaction. This is why the ordering above matters.
+
+Application logging was reviewed separately because redaction protects the model boundary, not every possible logging or error path.
+
+---
+
+# Deterministic emergency safety
+
+The emergency floor is implemented separately from the LLM:
+
+```text
+src/lib/risk.ts
+```
+
+The model may increase a patient's risk level, but it cannot lower the deterministic result.
+
+This means an emergency pathway can still work when:
+
+- the Anthropic provider is unavailable
+- the model times out
+- the model returns invalid output
+- the deterministic rule already identifies a High-risk phrase
+
+Round Two expanded the deterministic emergency layer to recognise English, Malay and common Manglish phrasing.
+
+**Measured before the change: 1 of 25 Malay and Manglish emergency phrasings reached High risk. After: 25 of 25, with English coverage unchanged.**
+
+The multilingual test also checks that the phrase reaches the correct emergency pathway, rather than only checking whether the final risk level is High.
+
+If the LLM is unavailable during an ordinary low-risk conversation, Nightingale gives an honest service-unavailable response instead of improvising clinical advice.
+
+---
+
+# Output-side safety
+
+Patient-facing AI output is also checked after generation.
+
+```text
+src/lib/output-gate.ts
+```
+
+The output gate can block known forms of:
+
+- direct diagnosis
+- false reassurance
+- unsafe medication changes or instructions
+
+This is intentionally separate from the system prompt. A prompt is guidance to the model; it is not treated as the only safety control.
+
+The current gate is deterministic and therefore has a known limitation: it recognises unsafe phrasing patterns rather than every possible unsafe meaning.
+
+---
+
+# Living Memory
+
+Nightingale maintains structured information from the patient's conversation, including:
+
+- presenting concerns
+- symptoms
+- medications
+- allergies
+- useful patient wording
+
+Corrections do not silently overwrite previous clinical information.
+
+Instead, the history is preserved so the current fact and the earlier corrected state can still be seen by the clinician.
+
+Round Two also fixed a correction-of-a-correction problem that could previously fork the memory history.
+
+---
+
+# Clinical handoff
+
+A patient can request human review without creating an account or providing contact details first.
+
+Once an escalation is created, the clinical view can show:
+
+- risk level and reason
+- triggering patient message
+- triage summary
+- current Living Memory facts
+- corrected historical facts
+- acquisition context
+- contact preference
+- response deadline
+
+A patient's preferred contact route is requested **after** the case is sent. It is not a condition for receiving help.
+
+Current options include:
+
+- email
+- WhatsApp
+- returning to the Nightingale conversation
+
+These are stored as preferences. Nightingale does **not** currently provide outbound WhatsApp, SMS or email delivery.
+
+Clinician replies can return to the patient's existing Nightingale conversation.
+
+---
+
+# Case closure
+
+Nurses and clinicians have different clinical permissions.
+
+A nurse can:
+
+- view the clinical queue
+- review a case
+- reply to the patient
+
+A clinician can do the same and can additionally:
+
+- select a closure reason
+- leave an internal handover note
+- close the case
+
+Clinician-only closure is also enforced at the database level.
+
+Closed cases remain part of the clinical record for later reference.
+
+---
+
+# How RBAC is enforced
+
+Nightingale uses several layers rather than relying on a single UI check.
+
+## 1. Route protection
+
+`src/proxy.ts` protects staff routes before the page loads.
+
+Unauthenticated users and patients cannot access `/staff/*`.
+
+## 2. Server-side role checks
+
+`src/app/staff/layout.tsx` re-checks the authenticated user's role.
+
+Clinical triage is restricted to clinical roles.
+
+## 3. Supabase Row Level Security
+
+RLS policies provide database-level restrictions.
+
+Broadly:
+
+| Role | Access |
+|---|---|
+| guest | No direct authenticated database account |
+| patient | Own patient data |
+| staff | Acquisition / lead information only |
+| nurse | Clinical read and escalation reply |
+| clinician | Nurse permissions plus case closure |
+
+Clinical triage reads use the authenticated clinician's Supabase session rather than trusting a `clinic_id` sent by the browser.
+
+The service-role client is reserved for server-side operations that genuinely require privileged access.
+
+Round Two also found a case where an RLS policy existed but the table lacked the corresponding authenticated grant. The grant was added so the intended policy is now actually exercised.
+
+---
+
+# Guest data retention
+
+Anonymous guest data is intended to be temporary.
+
+The guest-retention window is 14 days.
+
+Round Two found that the original purge could fail because foreign-key relationships prevented deletion while making the process appear successful.
+
+Migration 17 corrects those relationships and the deletion path.
+
+Expired guest data can now be removed without deleting separately governed clinical escalation records.
+
+The retention path is covered by a Round Two scenario test, although other guest-boundary controls such as rate limiting should still be re-verified before treating Scenario 12 as fully complete.
+
+---
+
+# Known gaps
+
+The following limitations are intentionally documented rather than hidden:
+
+- **No active re-engagement after the tab closes.** Clinician replies can wait inside the patient's Nightingale conversation, but there is currently no working Web Push, SMS, WhatsApp or email transport that wakes a closed session.
+- **Anonymous cross-device recovery is incomplete.** An authenticated patient can log in on another device and restore the conversation. A completely anonymous guest does not have the same recovery path.
+- **Outbound email is not implemented.** Nightingale does not pretend that an email has been sent when no transport exists.
+- **Contact preference is not message delivery.** Selecting WhatsApp or email records how the patient would prefer to be reached; the build does not currently send through those channels.
+- **Consent text is not versioned per consent event.**
+- **Mandarin and other unverified languages are not covered by the deterministic emergency floor.**
+- **The interface itself is still mainly English even when Malay/Manglish emergency phrases are recognised.**
+- **Contradiction detection is incomplete.** Multiple safety-relevant facts can be shown for human review, but negation-aware contradiction handling still needs improvement.
+- **Living Memory provenance is based on a message reference rather than an immutable evidence snapshot.**
+- **The clinician workflow is a reply mechanism rather than a true shared live thread.** Later patient messages still go through the assistant.
+- **Two-clinic isolation has not yet been verified end-to-end with two separate clinic identities.**
+- **The knowledge corpus has not undergone formal clinician review.**
+
+These limitations are discussed in more detail in the Round Two Technical Brief.
+
+---
+
+# Synthetic data only
+
+No real patient data is used in the repository, database or demonstration.
+
+All accounts, conversations and clinical examples were created specifically for this build.
